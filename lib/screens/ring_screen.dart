@@ -48,6 +48,9 @@ class _RingScreenState extends State<RingScreen> {
         ? _app.settings.pushupTarget
         : _app.pushupTargetFor(widget.alarmId);
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+    // The phone is usually propped up on the floor, often sideways. Letting the
+    // UI rotate keeps the camera image upright, which the posture check needs.
+    SystemChrome.setPreferredOrientations(DeviceOrientation.values);
     _clock = Timer.periodic(const Duration(seconds: 1), (_) {
       if (mounted) setState(() => _now = DateTime.now());
     });
@@ -62,6 +65,7 @@ class _RingScreenState extends State<RingScreen> {
   void dispose() {
     _clock?.cancel();
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+    SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
     super.dispose();
   }
 
@@ -128,6 +132,9 @@ class _RingScreenState extends State<RingScreen> {
     const onDark = Colors.white;
     final remainingSec = settings.fallbackDelaySec - _now.difference(_opened).inSeconds;
     final label = _alarm?.label ?? '';
+    final size = MediaQuery.sizeOf(context);
+    final compact = size.height < 520; // landscape phone
+    final ring = compact ? size.height * 0.34 : 200.0;
 
     final overlay = _success
         ? Container(
@@ -142,7 +149,7 @@ class _RingScreenState extends State<RingScreen> {
           )
         : SafeArea(
             child: Padding(
-              padding: const EdgeInsets.all(20),
+              padding: EdgeInsets.all(compact ? 8 : 20),
               child: Column(
                 children: [
                   if (widget.practice)
@@ -154,37 +161,38 @@ class _RingScreenState extends State<RingScreen> {
                       ),
                     ),
                   Text(DateFormat.jm().format(_now),
-                      style: tt.displayMedium
+                      style: (compact ? tt.headlineSmall : tt.displayMedium)
                           ?.copyWith(color: onDark, fontWeight: FontWeight.w300)),
                   if (label.isNotEmpty)
                     Text(label, style: tt.titleMedium?.copyWith(color: onDark)),
                   const Spacer(),
                   SizedBox(
-                    width: 200,
-                    height: 200,
+                    width: ring,
+                    height: ring,
                     child: Stack(alignment: Alignment.center, children: [
                       SizedBox.expand(
                         child: CircularProgressIndicator(
                           value: (_count / _target).clamp(0.0, 1.0),
-                          strokeWidth: 12,
+                          strokeWidth: compact ? 8 : 12,
                           backgroundColor: Colors.white24,
                         ),
                       ),
                       Text('$_count / $_target',
-                          style: tt.displaySmall
+                          style: (compact ? tt.headlineSmall : tt.displaySmall)
                               ?.copyWith(color: onDark, fontWeight: FontWeight.bold)),
                     ]),
                   ),
-                  const SizedBox(height: 16),
+                  SizedBox(height: compact ? 6 : 16),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                    padding: EdgeInsets.symmetric(horizontal: 16, vertical: compact ? 4 : 10),
                     decoration: BoxDecoration(
                       color: Colors.black54,
                       borderRadius: BorderRadius.circular(16),
                     ),
                     child: Text(_hint,
                         textAlign: TextAlign.center,
-                        style: tt.titleLarge?.copyWith(color: onDark)),
+                        style: (compact ? tt.titleMedium : tt.titleLarge)
+                            ?.copyWith(color: onDark)),
                   ),
                   const Spacer(),
                   if (!widget.practice && settings.fallbackEnabled)

@@ -55,7 +55,6 @@ class AlarmScheduler {
   Future<void> _sync(List<AlarmConfig> alarms, AppSettings settings) async {
     if (!_inited) await init();
     final now = DateTime.now();
-    final ringing = currentRingingIds;
     final wanted = {for (final a in alarms.where((a) => a.enabled)) a.id: a};
 
     List<AlarmSettings> existing;
@@ -64,6 +63,13 @@ class AlarmScheduler {
     } catch (e) {
       debugPrint('Alarm.getAlarms failed: $e');
       existing = const [];
+    }
+    // Ask the platform, not just the Dart stream: when the app was launched
+    // *by* a ringing alarm the stream may not have emitted yet, and calling
+    // Alarm.set / Alarm.stop for that id would silence it.
+    final ringing = {...currentRingingIds};
+    for (final e in existing) {
+      if (!e.dateTime.isAfter(now) && await _isRinging(e.id)) ringing.add(e.id);
     }
     for (final e in existing) {
       if (ringing.contains(e.id) || wanted.containsKey(e.id)) continue;
@@ -114,6 +120,30 @@ class AlarmScheduler {
         debugPrint('Alarm.set ${a.id} failed: $e\n$s');
       }
     }
+  }
+
+  Future<bool> _isRinging(int id) async {
+    try {
+      return await Alarm.isRinging(id);
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Ids ringing right now according to the platform (slower than
+  /// [currentRingingIds] but correct right after a cold start).
+  Future<Set<int>> queryRinging() async {
+    final ids = {...currentRingingIds};
+    try {
+      for (final e in await Alarm.getAlarms()) {
+        if (!e.dateTime.isAfter(DateTime.now()) && await _isRinging(e.id)) {
+          ids.add(e.id);
+        }
+      }
+    } catch (e) {
+      debugPrint('queryRinging failed: $e');
+    }
+    return ids;
   }
 
   Future<void> stop(int id) async {

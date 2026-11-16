@@ -3,8 +3,6 @@ import 'dart:io' show Platform;
 import 'package:camera/camera.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter/widgets.dart';
-import 'package:google_mlkit_commons/google_mlkit_commons.dart';
 import 'package:google_mlkit_pose_detection/google_mlkit_pose_detection.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -266,9 +264,11 @@ class _PushupCameraViewState extends State<PushupCameraView>
         child: Center(child: CircularProgressIndicator()),
       );
     }
-    // Upright preview size (aspectRatio is orientation aware).
+    // CameraValue.aspectRatio is the sensor's (landscape) ratio; CameraPreview
+    // inverts it in portrait, so the box we lay it out in must do the same.
     final ar = c.value.aspectRatio;
-    final previewSize = Size(ar * 1000, 1000);
+    final portrait = MediaQuery.orientationOf(context) == Orientation.portrait;
+    final previewSize = portrait ? Size(1000, ar * 1000) : Size(ar * 1000, 1000);
     final mirror = _camera?.lensDirection == CameraLensDirection.front;
     return ClipRect(
       child: ColoredBox(
@@ -394,7 +394,7 @@ class _SkeletonPainter extends CustomPainter {
     }
     for (final l in pose.landmarks.entries) {
       final t = l.key;
-      if (t.index <= PoseLandmarkType.mouthRight.index) continue; // face
+      if (t.index <= PoseLandmarkType.rightMouth.index) continue; // face
       if (l.value.likelihood < 0.3) continue;
       canvas.drawCircle(_map(l.value, size), 8, dot);
     }

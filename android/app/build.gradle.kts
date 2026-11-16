@@ -36,6 +36,11 @@ android {
             // TODO: Add your own signing config for the release build.
             // Signing with the debug keys for now, so `flutter run --release` works.
             signingConfig = signingConfigs.getByName("debug")
+            // Code shrinking is off on purpose: the alarm and ML Kit plugins
+            // use reflection, and a stripped class would only show up as an
+            // alarm that fails to ring.
+            isMinifyEnabled = false
+            isShrinkResources = false
         }
     }
 }

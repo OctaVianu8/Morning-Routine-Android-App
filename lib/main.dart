@@ -68,9 +68,7 @@ class _MorningGloryAppState extends State<MorningGloryApp> with WidgetsBindingOb
     WidgetsBinding.instance.addObserver(this);
     _ringSub = AlarmScheduler.instance.ringingIds.listen(_onRinging);
     // The app may have been launched *by* a ringing alarm (full-screen intent).
-    WidgetsBinding.instance.addPostFrameCallback(
-      (_) => _onRinging(AlarmScheduler.instance.currentRingingIds),
-    );
+    WidgetsBinding.instance.addPostFrameCallback((_) => _checkRinging());
   }
 
   @override
@@ -83,11 +81,14 @@ class _MorningGloryAppState extends State<MorningGloryApp> with WidgetsBindingOb
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state != AppLifecycleState.resumed) return;
-    _onRinging(AlarmScheduler.instance.currentRingingIds);
+    _checkRinging();
     // Repeating alarms are re-armed from Dart, so top up whenever we come back.
     final app = context.read<AppState>();
     unawaited(AlarmScheduler.instance.sync(app.alarms, app.settings));
   }
+
+  Future<void> _checkRinging() async =>
+      _onRinging(await AlarmScheduler.instance.queryRinging());
 
   void _onRinging(Set<int> ids) {
     if (ids.isEmpty || _showing != null) return;
@@ -103,7 +104,7 @@ class _MorningGloryAppState extends State<MorningGloryApp> with WidgetsBindingOb
         .whenComplete(() {
       _showing = null;
       // Another alarm may have started while this one was on screen.
-      _onRinging(AlarmScheduler.instance.currentRingingIds);
+      _checkRinging();
     });
   }
 

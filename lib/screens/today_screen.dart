@@ -76,11 +76,13 @@ class TodayScreen extends StatelessWidget {
               children: [
                 Row(
                   children: [
-                    Text(
-                      streak > 0 ? '🔥 $streak-day streak' : 'No streak yet',
-                      style: tt.titleMedium,
+                    Expanded(
+                      child: Text(
+                        streak > 0 ? '🔥 $streak-day streak' : 'No streak yet',
+                        style: tt.titleMedium,
+                      ),
                     ),
-                    const Spacer(),
+                    const SizedBox(width: 8),
                     Text('$done of ${habits.length} done', style: tt.titleSmall),
                   ],
                 ),
