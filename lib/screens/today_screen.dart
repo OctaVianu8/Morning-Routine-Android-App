@@ -6,6 +6,7 @@ import '../models/alarm_config.dart';
 import '../models/habit.dart';
 import '../services/app_state.dart';
 import '../services/tts_service.dart';
+import '../widgets/streak_card.dart';
 import 'alarms_screen.dart';
 import 'habits_edit_screen.dart';
 import 'ring_screen.dart';
@@ -41,9 +42,6 @@ class TodayScreen extends StatelessWidget {
     final tt = Theme.of(context).textTheme;
     final now = DateTime.now();
     final habits = s.enabledHabits;
-    final done = s.doneCount();
-    final progress = habits.isEmpty ? 0.0 : done / habits.length;
-    final streak = s.streak;
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
@@ -68,33 +66,7 @@ class TodayScreen extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 16),
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        streak > 0 ? '🔥 $streak-day streak' : 'No streak yet',
-                        style: tt.titleMedium,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Text('$done of ${habits.length} done', style: tt.titleSmall),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(8),
-                  child: LinearProgressIndicator(value: progress, minHeight: 10),
-                ),
-              ],
-            ),
-          ),
-        ),
+        const StreakCard(),
         const SizedBox(height: 8),
         _NextAlarmCard(alarms: s.alarms, now: now),
         const SizedBox(height: 16),

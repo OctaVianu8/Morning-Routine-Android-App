@@ -22,10 +22,11 @@ Future<AppState> _pump(WidgetTester tester, Size size, {Widget? home}) async {
 }
 
 void main() {
+  streakTests();
   for (final size in const [Size(360, 640), Size(412, 915)]) {
     testWidgets('tabs render without layout errors at $size', (tester) async {
       final state = await _pump(tester, size);
-      expect(find.text('Do pushups'), findsOneWidget);
+      expect(find.text('day streak'), findsOneWidget);
 
       state.upsertAlarm(AlarmConfig(
           id: 1, hour: 7, minute: 0, weekdays: {1, 2, 3, 4, 5}, label: 'Work'));
@@ -65,5 +66,39 @@ void main() {
         home: const MathChallengeScreen(problems: 3));
     expect(find.textContaining('1 of 3'), findsOneWidget);
     expect(tester.takeException(), isNull);
+  });
+}
+
+// Appended: streak behaviour.
+void streakTests() {
+  testWidgets('completing the routine lights the streak and celebrates', (tester) async {
+    final state = await _pump(tester, const Size(412, 915));
+    expect(find.text('day streak'), findsOneWidget);
+    expect(state.streak, 0);
+
+    for (final h in state.enabledHabits) {
+      state.setDone(h.id, true);
+    }
+    await tester.pump(); // card sees the transition
+    await tester.pump(const Duration(milliseconds: 500)); // deferred dialog
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(find.text('Streak started!'), findsOneWidget);
+    expect(state.streak, 1);
+    expect(state.bestStreak, 1);
+
+    await tester.pump(const Duration(seconds: 4)); // confetti finishes
+    await tester.tap(find.text('Keep it going'));
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pump(const Duration(seconds: 1));
+    expect(find.text('Streak started!'), findsNothing);
+    expect(find.textContaining('See you tomorrow'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+
+    // Un-ticking breaks today but the record stays.
+    state.setDone(state.enabledHabits.first.id, false);
+    await tester.pump(const Duration(seconds: 1));
+    expect(state.streak, 0);
+    expect(state.bestStreak, 1);
   });
 }

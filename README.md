@@ -22,8 +22,12 @@ Built with Flutter: Android today, iOS from the same codebase.
   deliberately annoying math challenge unlocks after 60 s of ringing. Delay
   and problem count are configurable; it can be switched off for strict mode.
 - **Habits** – recommended checklist (pushups, water, make the bed, yogurt,
-  5 minutes outside, …), custom habits, daily reminder notifications, streak.
+  5 minutes outside, …), custom habits, daily reminder notifications.
   Finishing the alarm ticks off "Do pushups" automatically.
+- **Day streak** – a day counts when every enabled habit is ticked. The Today
+  tab shows an animated flame, the last seven days, your best streak and the
+  next milestone (3, 7, 14, 30, …); completing the routine triggers a confetti
+  celebration with sound, haptics and voice.
 - **Practice mode** – try the pushup counter without an alarm.
 
 ## Project layout

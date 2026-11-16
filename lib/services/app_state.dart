@@ -21,12 +21,14 @@ class AppState extends ChangeNotifier {
   static const _kHabits = 'habits';
   static const _kSettings = 'settings';
   static const _kDone = 'completions';
+  static const _kBest = 'bestStreak';
 
   List<AlarmConfig> _alarms = [];
   List<Habit> _habits = [];
   AppSettings _settings = const AppSettings();
   // 'yyyy-MM-dd' -> ids of habits completed that day.
   Map<String, Set<String>> _done = {};
+  int _best = 0;
 
   VoidCallback? onAlarmsChanged;
   VoidCallback? onHabitsChanged;
@@ -43,6 +45,7 @@ class AppState extends ChangeNotifier {
   }
 
   void _read() {
+    _best = _prefs.getInt(_kBest) ?? 0;
     try {
       final a = _prefs.getString(_kAlarms);
       if (a != null) {
@@ -158,6 +161,11 @@ class AppState extends ChangeNotifier {
     if (done ? !set.add(habitId) : !set.remove(habitId)) return;
     _prefs.setString(
         _kDone, jsonEncode(_done.map((k, v) => MapEntry(k, v.toList()))));
+    final current = streak;
+    if (current > _best) {
+      _best = current;
+      _prefs.setInt(_kBest, _best);
+    }
     notifyListeners();
   }
 
@@ -181,6 +189,18 @@ class AppState extends ChangeNotifier {
       if (!isPerfectDay(day)) return n;
       n++;
     }
+  }
+
+  /// Longest streak ever reached.
+  int get bestStreak => _best > streak ? _best : streak;
+
+  /// Whether each of the last [n] days (oldest first, today last) was perfect.
+  List<bool> lastDaysPerfect(int n) {
+    final now = DateTime.now();
+    return [
+      for (var i = n - 1; i >= 0; i--)
+        isPerfectDay(DateTime(now.year, now.month, now.day - i)),
+    ];
   }
 
   // ---- settings ----
