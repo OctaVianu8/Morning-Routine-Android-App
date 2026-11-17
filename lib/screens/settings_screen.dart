@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:intl/intl.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:provider/provider.dart';
@@ -12,6 +13,7 @@ import '../services/calendar_service.dart';
 import '../services/weather_service.dart';
 import '../services/reminder_service.dart';
 import '../services/tts_service.dart';
+import '../services/wear_service.dart';
 import 'ring_screen.dart';
 
 class SettingsScreen extends StatelessWidget {
@@ -109,6 +111,8 @@ class SettingsScreen extends StatelessWidget {
         ),
         const _Header('Morning briefing'),
         const _BriefingSettings(),
+        const _Header('Smart watch'),
+        const _WatchSettings(),
         const _Header('Permissions'),
         ListTile(
           leading: const Icon(Icons.verified_user_outlined),
@@ -142,6 +146,131 @@ class SettingsScreen extends StatelessWidget {
         ),
       ],
     );
+  }
+}
+
+/// Describes the latest watch state as one line, e.g.
+/// "Monitoring, 42 min of data, battery 63%". Pure for testing.
+String describeWatchState(WearStatus s) {
+  final parts = <String>[];
+  switch (s.state) {
+    case 'idle':
+      parts.add('Idle');
+    case 'scheduled':
+      parts.add('Waiting for the wake window');
+    case 'monitoring':
+      parts.add('Monitoring');
+      if (s.epochs > 0) parts.add('${s.epochs} min of data');
+    case 'woke':
+      parts.add('Woke you early');
+    case 'finished':
+      parts.add('Finished');
+    case 'no_permission':
+      parts.add('Needs body sensor permission on the watch');
+    default:
+      return '';
+  }
+  if (s.battery > 0) parts.add('battery ${s.battery}%');
+  return parts.join(', ');
+}
+
+class _WatchSettings extends StatefulWidget {
+  const _WatchSettings();
+
+  @override
+  State<_WatchSettings> createState() => _WatchSettingsState();
+}
+
+class _WatchSettingsState extends State<_WatchSettings> {
+  WearStatus? _status;
+  bool _loading = true;
+  bool _pinging = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _refresh();
+  }
+
+  Future<void> _refresh() async {
+    setState(() => _loading = true);
+    final st = await WearService.instance.status();
+    if (!mounted) return;
+    setState(() {
+      _status = st;
+      _loading = false;
+    });
+  }
+
+  Future<void> _ping() async {
+    final messenger = ScaffoldMessenger.of(context);
+    setState(() => _pinging = true);
+    final ok = await WearService.instance.ping();
+    if (!mounted) return;
+    setState(() => _pinging = false);
+    messenger
+      ..clearSnackBars()
+      ..showSnackBar(SnackBar(
+          content: Text(ok ? 'Watch answered' : 'No answer from the watch')));
+    unawaited(_refresh());
+  }
+
+  String _lastWake(WearStatus s) {
+    final at = s.lastEarlyWakeAt;
+    if (at == null) return '';
+    final now = DateTime.now();
+    final day = DateTime(at.year, at.month, at.day);
+    final today = DateTime(now.year, now.month, now.day);
+    final diff = today.difference(day).inDays;
+    final when = diff == 0
+        ? 'today'
+        : diff == 1
+            ? 'yesterday'
+            : DateFormat('EEE d MMM', 'en_US').format(at);
+    final time = TimeOfDay.fromDateTime(at).format(context);
+    final why = s.lastEarlyWakeReason.isEmpty ? '' : ' (${s.lastEarlyWakeReason})';
+    return 'Last early wake: $when $time$why';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final s = _status;
+    final String title;
+    final lines = <String>[];
+    if (s == null) {
+      title = 'Checking watch\u2026';
+    } else {
+      title = s.watchReachable
+          ? (s.watchName.isEmpty ? 'Watch connected' : '${s.watchName} connected')
+          : 'Watch app not found \u2014 see wear/README.md';
+      final d = describeWatchState(s);
+      if (d.isNotEmpty) lines.add(d);
+      final w = _lastWake(s);
+      if (w.isNotEmpty) lines.add(w);
+    }
+    return Column(children: [
+      ListTile(
+        leading: Icon(s?.watchReachable == true ? Icons.watch : Icons.watch_off_outlined),
+        title: Text(title),
+        subtitle: lines.isEmpty ? null : Text(lines.join('\n')),
+        isThreeLine: lines.length > 1,
+        trailing: _loading
+            ? const SizedBox(
+                width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
+            : null,
+        onTap: _refresh,
+      ),
+      ListTile(
+        leading: const Icon(Icons.wifi_tethering),
+        title: const Text('Test connection'),
+        subtitle: const Text('The watch vibrates and answers'),
+        trailing: _pinging
+            ? const SizedBox(
+                width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
+            : null,
+        onTap: _pinging ? null : _ping,
+      ),
+    ]);
   }
 }
 

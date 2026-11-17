@@ -1,0 +1,217 @@
+import 'package:flutter_test/flutter_test.dart';
+import 'package:morning_glory/models/alarm_config.dart';
+import 'package:morning_glory/screens/settings_screen.dart';
+import 'package:morning_glory/services/briefing_service.dart';
+import 'package:morning_glory/services/wear_service.dart';
+
+void main() {
+  final now = DateTime(2026, 3, 10, 22, 0); // Tuesday evening
+
+  test('AlarmConfig smartWakeMinutes round trip and legacy json', () {
+    final a = AlarmConfig(id: 3, hour: 7, minute: 0, smartWakeMinutes: 25);
+    expect(AlarmConfig.fromJson(a.toJson()).smartWakeMinutes, 25);
+    expect(a.copyWith(smartWakeMinutes: 0).smartWakeMinutes, 0);
+    expect(a.copyWith(hour: 8).smartWakeMinutes, 25);
+    final legacy = Map<String, dynamic>.from(a.toJson())
+      ..remove('smartWakeMinutes');
+    expect(AlarmConfig.fromJson(legacy).smartWakeMinutes, 0);
+  });
+
+  group('selectWearPlan', () {
+    test('soonest enabled smart alarm wins', () {
+      final plan = selectWearPlan([
+        AlarmConfig(id: 1, hour: 9, minute: 0, smartWakeMinutes: 30),
+        AlarmConfig(id: 2, hour: 6, minute: 30, smartWakeMinutes: 20),
+        AlarmConfig(id: 3, hour: 5, minute: 0), // soonest but not smart
+        AlarmConfig(
+          id: 4,
+          hour: 5,
+          minute: 30,
+          smartWakeMinutes: 10,
+          enabled: false,
+        ),
+      ], now);
+      expect(plan.alarmId, 2);
+      expect(plan.windowMinutes, 20);
+      expect(
+        plan.alarmTimeMillis,
+        DateTime(2026, 3, 11, 6, 30).millisecondsSinceEpoch,
+      );
+    });
+
+    test('none -> cancel', () {
+      expect(selectWearPlan([], now), WearPlan.cancel);
+      expect(
+        selectWearPlan([
+          AlarmConfig(id: 1, hour: 7, minute: 0),
+        ], now).windowMinutes,
+        0,
+      );
+    });
+  });
+
+  group('keepPulledForwardAlarm', () {
+    final next = DateTime(2026, 3, 11, 6, 30);
+    final wakeAt = DateTime(2026, 3, 11, 6, 12);
+    final ringAt = wakeAt.add(const Duration(seconds: 6));
+    EarlyWake wake({int id = 2, DateTime? at}) =>
+        EarlyWake(alarmId: id, at: at ?? wakeAt, reason: 'movement');
+
+    test('keeps a freshly pulled-forward alarm', () {
+      final t = wakeAt.add(const Duration(seconds: 3));
+      expect(
+        keepPulledForwardAlarm(
+          alarmId: 2,
+          existingDateTime: ringAt,
+          nextOccurrence: next,
+          now: t,
+          lastEarlyWake: wake(),
+        ),
+        isTrue,
+      );
+      // just after it started ringing (stored time slightly in the past)
+      final t2 = wakeAt.add(const Duration(seconds: 90));
+      expect(
+        keepPulledForwardAlarm(
+          alarmId: 2,
+          existingDateTime: ringAt,
+          nextOccurrence: next,
+          now: t2,
+          lastEarlyWake: wake(),
+        ),
+        isTrue,
+      );
+    });
+
+    test('user edit to a later time still reschedules', () {
+      final t = DateTime(2026, 3, 10, 22, 0);
+      // existing is later than the new next -> not earlier
+      expect(
+        keepPulledForwardAlarm(
+          alarmId: 2,
+          existingDateTime: DateTime(2026, 3, 11, 7, 0),
+          nextOccurrence: DateTime(2026, 3, 11, 6, 30),
+          now: t,
+          lastEarlyWake: null,
+        ),
+        isFalse,
+      );
+      // earlier existing but no recent early wake (user moved alarm later)
+      expect(
+        keepPulledForwardAlarm(
+          alarmId: 2,
+          existingDateTime: DateTime(2026, 3, 11, 6, 0),
+          nextOccurrence: next,
+          now: t,
+          lastEarlyWake: null,
+        ),
+        isFalse,
+      );
+      expect(
+        keepPulledForwardAlarm(
+          alarmId: 2,
+          existingDateTime: DateTime(2026, 3, 11, 6, 0),
+          nextOccurrence: next,
+          now: t,
+          lastEarlyWake: wake(at: wakeAt.subtract(const Duration(hours: 5))),
+        ),
+        isFalse,
+      );
+    });
+
+    test(
+      'different alarm id, stale stored time, or old wake are not protected',
+      () {
+        final t = wakeAt.add(const Duration(seconds: 3));
+        expect(
+          keepPulledForwardAlarm(
+            alarmId: 9,
+            existingDateTime: ringAt,
+            nextOccurrence: next,
+            now: t,
+            lastEarlyWake: wake(),
+          ),
+          isFalse,
+        );
+        final late = wakeAt.add(const Duration(minutes: 5));
+        expect(
+          keepPulledForwardAlarm(
+            alarmId: 2,
+            existingDateTime: ringAt,
+            nextOccurrence: next,
+            now: late,
+            lastEarlyWake: wake(),
+          ),
+          isFalse,
+        );
+      },
+    );
+  });
+
+  test('WearStatus.fromMap tolerates missing fields', () {
+    final s = WearStatus.fromMap({
+      'watchReachable': true,
+      'watchName': 'Galaxy Watch',
+    });
+    expect(s.watchReachable, isTrue);
+    expect(s.state, '');
+    expect(s.lastEarlyWake, isNull);
+    final w = WearStatus.fromMap({
+      'state': 'monitoring',
+      'epochs': 42,
+      'battery': 63,
+      'lastEarlyWakeAt': 1000,
+      'lastEarlyWakePlannedAt': 1000 + 18 * 60000,
+      'lastEarlyWakeAlarmId': 2,
+    });
+    expect(describeWatchState(w), 'Monitoring, 42 min of data, battery 63%');
+    expect(w.lastEarlyWake!.minutesEarly, 18);
+  });
+
+  test('briefing mentions an early wake', () {
+    final t = composeBriefing(
+      BriefingData(now: DateTime(2026, 3, 11, 6, 40), earlyWakeMinutes: 18),
+    );
+    expect(
+      t,
+      contains(
+        'Your watch caught you in light sleep and woke you 18 minutes early.',
+      ),
+    );
+    expect(
+      composeBriefing(BriefingData(now: DateTime(2026, 3, 11, 6, 40))),
+      isNot(contains('watch')),
+    );
+  });
+
+  test('WearService is a silent no-op without a platform', () async {
+    await WearService.instance.syncPlan([
+      AlarmConfig(id: 1, hour: 7, minute: 0, smartWakeMinutes: 20),
+    ]);
+    expect(await WearService.instance.ping(), isFalse);
+    expect((await WearService.instance.status()).watchReachable, isFalse);
+  });
+
+  group('nextOccurrenceAfterEarlyWake', () {
+    final alarm = AlarmConfig(
+        id: 9, hour: 7, minute: 0, weekdays: {1, 2, 3, 4, 5, 6, 7}, smartWakeMinutes: 30);
+    final planned = DateTime(2026, 11, 17, 7, 0);
+    EarlyWake wake(int id) => EarlyWake(
+        alarmId: id, at: DateTime(2026, 11, 17, 6, 41), reason: 'movement', plannedAt: planned);
+
+    test('after an early wake the same morning is skipped', () {
+      final now = DateTime(2026, 11, 17, 6, 45); // pushups done, 07:00 still ahead
+      expect(nextOccurrenceAfterEarlyWake(alarm, now, wake(9)), DateTime(2026, 11, 18, 7, 0));
+      expect(selectWearPlan([alarm], now, wake(9)).alarmTimeMillis,
+          DateTime(2026, 11, 18, 7, 0).millisecondsSinceEpoch);
+    });
+
+    test('no early wake, another alarm, or an old wake: regular time', () {
+      final now = DateTime(2026, 11, 17, 6, 45);
+      expect(nextOccurrenceAfterEarlyWake(alarm, now, null), planned);
+      expect(nextOccurrenceAfterEarlyWake(alarm, now, wake(8)), planned);
+      final nextDay = DateTime(2026, 11, 17, 7, 30);
+      expect(nextOccurrenceAfterEarlyWake(alarm, nextDay, wake(9)), DateTime(2026, 11, 18, 7, 0));
+    });
+  });
+}

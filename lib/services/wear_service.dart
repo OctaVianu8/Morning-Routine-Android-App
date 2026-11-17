@@ -35,11 +35,11 @@ class WearPlan {
 }
 
 /// Pure: the enabled smart alarm that rings soonest, or [WearPlan.cancel].
-WearPlan selectWearPlan(List<AlarmConfig> alarms, DateTime now) {
+WearPlan selectWearPlan(List<AlarmConfig> alarms, DateTime now, [EarlyWake? earlyWake]) {
   WearPlan? best;
   for (final a in alarms) {
     if (!a.enabled || a.smartWakeMinutes <= 0) continue;
-    final t = a.nextOccurrence(now).millisecondsSinceEpoch;
+    final t = nextOccurrenceAfterEarlyWake(a, now, earlyWake).millisecondsSinceEpoch;
     if (best == null || t < best.alarmTimeMillis) {
       best = WearPlan(
         alarmId: a.id,
@@ -49,6 +49,25 @@ WearPlan selectWearPlan(List<AlarmConfig> alarms, DateTime now) {
     }
   }
   return best ?? WearPlan.cancel;
+}
+
+/// Pure: when an alarm should ring next, given that the watch may already have
+/// rung it early today. After an early wake the regular time is still in the
+/// future, so a plain `nextOccurrence(now)` would ring the same alarm a second
+/// time a few minutes after the pushups; skip to the occurrence after it.
+DateTime nextOccurrenceAfterEarlyWake(AlarmConfig a, DateTime now, EarlyWake? w) {
+  final planned = w?.plannedAt;
+  final at = w?.at;
+  if (w != null &&
+      w.alarmId == a.id &&
+      planned != null &&
+      at != null &&
+      now.isBefore(planned) &&
+      !at.isAfter(now.add(const Duration(minutes: 1))) &&
+      planned.difference(at) <= const Duration(minutes: 62)) {
+    return a.nextOccurrence(planned);
+  }
+  return a.nextOccurrence(now);
 }
 
 /// Pure: should [AlarmScheduler] leave a platform alarm alone because the
@@ -185,7 +204,7 @@ class WearService {
 
   Future<void> syncPlan(List<AlarmConfig> alarms) async {
     if (!_supported) return;
-    final plan = selectWearPlan(alarms, DateTime.now());
+    final plan = selectWearPlan(alarms, DateTime.now(), await lastEarlyWake());
     if (plan == _lastSent) return;
     try {
       final ok = await _channel.invokeMethod<bool>('syncPlan', {

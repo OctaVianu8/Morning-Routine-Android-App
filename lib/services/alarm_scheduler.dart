@@ -81,8 +81,8 @@ class AlarmScheduler {
       }
     }
 
-    EarlyWake? earlyWake;
-    var earlyWakeLoaded = false;
+    // Cheap (one prefs read); null when there is no watch or no early wake.
+    final earlyWake = await WearService.instance.lastEarlyWake();
     for (final a in wanted.values) {
       if (ringing.contains(a.id)) continue;
       try {
@@ -90,7 +90,7 @@ class AlarmScheduler {
         final n = a.pushupsOverride ?? target;
         final next = AlarmSettings(
           id: a.id,
-          dateTime: a.nextOccurrence(now),
+          dateTime: nextOccurrenceAfterEarlyWake(a, now, earlyWake),
           assetAudioPath: a.assetPath,
           loopAudio: true,
           vibrate: settings.vibrate,
@@ -116,10 +116,6 @@ class AlarmScheduler {
         // ring as the app opens, so leave it alone; see keepPulledForwardAlarm.
         final stored = existing.where((e) => e.id == a.id).firstOrNull;
         if (stored != null && stored.dateTime.isBefore(next.dateTime)) {
-          if (!earlyWakeLoaded) {
-            earlyWakeLoaded = true;
-            earlyWake = await WearService.instance.lastEarlyWake();
-          }
           if (keepPulledForwardAlarm(
             alarmId: a.id,
             existingDateTime: stored.dateTime,
