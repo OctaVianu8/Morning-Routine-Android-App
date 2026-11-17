@@ -4,6 +4,9 @@ import android.content.Context
 import android.util.Log
 import com.gdelataillade.alarm.services.AlarmScheduler
 import com.gdelataillade.alarm.services.AlarmStorage
+import com.google.android.gms.wearable.DataEvent
+import com.google.android.gms.wearable.DataEventBuffer
+import com.google.android.gms.wearable.DataMapItem
 import com.google.android.gms.wearable.MessageEvent
 import com.google.android.gms.wearable.WearableListenerService
 import org.json.JSONObject
@@ -29,6 +32,22 @@ class WearListenerService : WearableListenerService() {
         }
     }
 
+    override fun onDataChanged(events: DataEventBuffer) {
+        try {
+            for (event in events) {
+                if (event.type != DataEvent.TYPE_CHANGED) continue
+                if (event.dataItem.uri.path != WearBridge.PATH_STATUS) continue
+                val map = DataMapItem.fromDataItem(event.dataItem).dataMap
+                val state = map.getString("state", "")
+                if (state == "woke" || state == "finished") {
+                    WearBridge.recordNight(applicationContext, map)
+                }
+            }
+        } catch (t: Throwable) {
+            Log.w(TAG, "data change handling failed", t)
+        }
+    }
+
     companion object {
         private const val TAG = "WearListener"
         private const val REARM_DELAY_MS = 6000L
@@ -44,6 +63,10 @@ class WearListenerService : WearableListenerService() {
             val window = prefs.getInt(WearBridge.K_PLAN_WINDOW, 0)
             val now = System.currentTimeMillis()
 
+            if (prefs.getBoolean(WearBridge.K_PLAN_DRY, false)) {
+                Log.i(TAG, "ignored wake: plan is a dry run")
+                return
+            }
             if (planId != alarmId || window <= 0) {
                 Log.i(TAG, "ignored wake: no matching plan (plan=$planId window=$window msg=$alarmId)")
                 return

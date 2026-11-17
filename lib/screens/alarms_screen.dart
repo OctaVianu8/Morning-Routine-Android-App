@@ -133,6 +133,20 @@ class AlarmsScreen extends StatelessWidget {
                           ]),
                           style: tt.bodyMedium?.copyWith(color: cs.onSurfaceVariant),
                         ),
+                        if (a.hasCustomSound && (a.customSoundName ?? '').isNotEmpty)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 2),
+                            child: Row(children: [
+                              Icon(Icons.music_note, size: 14, color: cs.onSurfaceVariant),
+                              const SizedBox(width: 4),
+                              Expanded(
+                                child: Text(a.customSoundName!,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant)),
+                              ),
+                            ]),
+                          ),
                       ]),
                     ),
                     Switch(

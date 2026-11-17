@@ -181,19 +181,44 @@ class _WatchSettings extends StatefulWidget {
   State<_WatchSettings> createState() => _WatchSettingsState();
 }
 
-class _WatchSettingsState extends State<_WatchSettings> {
+class _WatchSettingsState extends State<_WatchSettings> with WidgetsBindingObserver {
   WearStatus? _status;
+  List<WearNight> _nights = const [];
   bool _loading = true;
   bool _pinging = false;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _refresh();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) unawaited(_loadNights());
+  }
+
+  Future<void> _loadNights() async {
+    final n = await WearService.instance.history();
+    if (!mounted) return;
+    setState(() => _nights = n.take(7).toList());
+  }
+
+  Future<void> _clear() async {
+    await WearService.instance.clearHistory();
+    await _loadNights();
   }
 
   Future<void> _refresh() async {
     setState(() => _loading = true);
+    unawaited(_loadNights());
     final st = await WearService.instance.status();
     if (!mounted) return;
     setState(() {
@@ -248,7 +273,16 @@ class _WatchSettingsState extends State<_WatchSettings> {
       final w = _lastWake(s);
       if (w.isNotEmpty) lines.add(w);
     }
+    final app = context.watch<AppState>();
     return Column(children: [
+      SwitchListTile(
+        secondary: const Icon(Icons.science_outlined),
+        title: const Text('Dry run (record only)'),
+        subtitle: const Text(
+            'The watch records when it would have woken you; the alarm rings at the normal time.'),
+        value: app.settings.smartWakeDryRun,
+        onChanged: (v) => app.updateSettings(app.settings.copyWith(smartWakeDryRun: v)),
+      ),
       ListTile(
         leading: Icon(s?.watchReachable == true ? Icons.watch : Icons.watch_off_outlined),
         title: Text(title),
@@ -270,7 +304,85 @@ class _WatchSettingsState extends State<_WatchSettings> {
             : null,
         onTap: _pinging ? null : _ping,
       ),
+      const Padding(
+        padding: EdgeInsets.fromLTRB(16, 12, 16, 0),
+        child: Align(alignment: Alignment.centerLeft, child: Text('Recent nights')),
+      ),
+      if (_nights.isEmpty)
+        const ListTile(title: Text('No nights recorded yet'))
+      else ...[
+        for (final n in _nights) _NightTile(night: n),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8),
+          child: Align(
+            alignment: Alignment.centerRight,
+            child: TextButton.icon(
+              onPressed: _clear,
+              icon: const Icon(Icons.delete_outline),
+              label: const Text('Clear history'),
+            ),
+          ),
+        ),
+      ],
     ]);
+  }
+}
+
+class _NightTile extends StatelessWidget {
+  const _NightTile({required this.night});
+  final WearNight night;
+
+  static Color _color(String c, ColorScheme cs) => switch (c) {
+        'm' => cs.primary,
+        'h' => cs.tertiary,
+        'M' => cs.error,
+        _ => cs.outlineVariant,
+      };
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final t = night.alarmTime;
+    final date = DateFormat('EEE d MMM', 'en_US').format(t);
+    final time = TimeOfDay.fromDateTime(t).format(context);
+    final summary = summarizeTrace(night.trace);
+    final small = Theme.of(context).textTheme.bodySmall;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text(
+            '$date \u00b7 alarm $time, ${night.windowMinutes} min window'
+            '${night.dryRun ? ' (dry run)' : ''}',
+            style: Theme.of(context).textTheme.titleSmall),
+        Text(describeNight(night)),
+        if (summary.isNotEmpty) Text(summary, style: small),
+        if (night.trace.isNotEmpty) ...[
+          const SizedBox(height: 4),
+          Wrap(spacing: 1, runSpacing: 1, children: [
+            for (final c in night.trace.split(''))
+              Container(
+                width: 6,
+                height: 10,
+                color: _color(c, cs),
+              ),
+          ]),
+          const SizedBox(height: 2),
+          Wrap(spacing: 10, runSpacing: 2, children: [
+            for (final e in const [
+              ('.', 'still'),
+              ('m', 'movement'),
+              ('h', 'raised heart rate'),
+              ('M', 'both'),
+            ])
+              Row(mainAxisSize: MainAxisSize.min, children: [
+                Container(width: 6, height: 10, color: _color(e.$1, cs)),
+                const SizedBox(width: 4),
+                Text(e.$2, style: small?.copyWith(fontSize: 10)),
+              ]),
+          ]),
+        ],
+      ]),
+    );
   }
 }
 

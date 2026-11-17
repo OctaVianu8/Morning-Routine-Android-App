@@ -11,7 +11,7 @@ Built with Flutter: Android today, iOS from the same codebase.
 
 - **Pushup alarm** – full-screen alarm over the lock screen, volume enforced,
   no stop/snooze button, back button disabled, keeps ringing if the
-  notification is swiped away.
+  notification is swiped away. Each alarm can use a built-in sound or an audio file you pick from your phone.
 - **Camera rep counter** – Google ML Kit pose detection, fully on-device (no
   network, no video leaves the phone). A rep is elbow angle going below ~95°
   and back above ~150°, and only counts while the body is in a plank-like
@@ -40,7 +40,10 @@ Built with Flutter: Android today, iOS from the same codebase.
   `wear/README.md`) watches your movement from an hour before the alarm and,
   if it sees light sleep inside the window, rings the alarm early. It never
   rings earlier than the window and falls back to the normal time if the watch
-  says nothing. Needs a Galaxy Watch 4 or newer (Wear OS 3+); it is a
+  says nothing. A **dry-run mode (on by default)** only records when the
+  watch would have woken you while the alarm rings normally; review the
+  recorded nights under Settings > Smart watch > Recent nights, then switch it
+  off to let the watch wake you early. Needs a Galaxy Watch 4 or newer (Wear OS 3+); it is a
   movement-based estimate, not medical sleep staging. Android only.
 - **Practice mode** – try the pushup counter without an alarm.
 

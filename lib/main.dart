@@ -39,7 +39,7 @@ Future<void> main() async {
       await AlarmScheduler.instance.requestPermissions();
     }
     await AlarmScheduler.instance.sync(state.alarms, state.settings);
-    await WearService.instance.syncPlan(state.alarms);
+    await WearService.instance.syncPlan(state.alarms, dryRun: state.settings.smartWakeDryRun);
   }
 
   state.onAlarmsChanged = syncAlarms;
@@ -87,7 +87,7 @@ class _MorningGloryAppState extends State<MorningGloryApp> with WidgetsBindingOb
     // Repeating alarms are re-armed from Dart, so top up whenever we come back.
     final app = context.read<AppState>();
     unawaited(AlarmScheduler.instance.sync(app.alarms, app.settings));
-    unawaited(WearService.instance.syncPlan(app.alarms));
+    unawaited(WearService.instance.syncPlan(app.alarms, dryRun: app.settings.smartWakeDryRun));
   }
 
   Future<void> _checkRinging() async =>

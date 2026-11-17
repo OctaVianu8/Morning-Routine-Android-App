@@ -11,8 +11,8 @@ android {
         applicationId = "com.octavianu.morning_glory"
         minSdk = 30
         targetSdk = 34
-        versionCode = 1
-        versionName = "1.0.0"
+        versionCode = 2
+        versionName = "1.1.0"
     }
 
     // Same dev key as the phone app: the Wear data layer only links apps with

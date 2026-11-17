@@ -34,6 +34,11 @@ object Status {
                 putInt("epochs", Store.epochs(app))
                 putLong("wokeAt", Store.wokeAt(app))
                 putString("reason", Store.reason(app))
+                val plan = Store.loadPlan(app)
+                putBoolean("dryRun", plan?.dryRun ?: false)
+                putLong("alarmTimeMillis", plan?.alarmTimeMillis ?: 0L)
+                putInt("windowMinutes", plan?.windowMinutes ?: 0)
+                putString("trace", Store.trace(app))
             }
             Wearable.getDataClient(app).putDataItem(req.asPutDataRequest().setUrgent())
         } catch (_: Throwable) {

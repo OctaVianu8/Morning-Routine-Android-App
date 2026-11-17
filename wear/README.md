@@ -128,16 +128,36 @@ This is a movement based estimate, not medical sleep staging. In deep sleep
 and REM your body is mostly still; light sleep and short arousals show more
 movement. Starting 60 minutes before the alarm the watch records the
 accelerometer (about 10 Hz) and, if permitted, heart rate, in 30 second
-epochs. It learns your own still level from the earlier epochs, and inside the
-window it triggers when:
-
-- at least 2 of the last 4 epochs show movement, or
-- one epoch shows movement and heart rate is at least 8 % above your baseline.
+epochs. It learns your own still level from the earlier epochs. Inside the
+window it triggers only when movement is seen in at least 2 of the last 4
+half-minutes. Heart rate never triggers on its own and never replaces that
+rule: it only labels the decision. If the current epoch's heart rate is at
+least 8 % above your baseline the reason is "movement+hr", otherwise
+"movement". This protects against waking you out of REM sleep, where the body
+is still but the heart rate is raised.
 
 It never triggers in the last minute before the alarm and never twice. If the
 watch looks like it is lying on a table (no heart rate and perfectly flat
 motion) it does nothing. If it does not trigger, the alarm rings at the normal
 time.
+
+## Dry run
+
+In dry-run mode the watch runs exactly the same detection but never sends the
+wake message and never vibrates. The alarm rings at the normal time. It records
+what it would have done and shows it after the night, for example "Would have
+woken you at 06:41 (movement)", or "No light sleep seen in the window". Switch
+it on from the phone app: Settings, Smart watch.
+
+The watch also publishes a trace, one character per 30 second epoch inside the
+window, oldest first:
+
+- `.` still
+- `m` movement
+- `h` still, but heart rate at least 8 % above baseline
+- `M` movement with that heart rate rise
+
+The trace is also recorded in real (non dry-run) nights, up to the wake moment.
 
 ## Battery
 

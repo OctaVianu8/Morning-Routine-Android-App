@@ -17,6 +17,7 @@ class AppSettings {
     this.cityLat,
     this.cityLon,
     this.cityLabel = '',
+    this.smartWakeDryRun = true,
   });
 
   /// Pushups needed to stop an alarm (1..100).
@@ -56,6 +57,10 @@ class AppSettings {
   final double? cityLon;
   final String cityLabel;
 
+  /// Smart watch only records when it would have woken you; the alarm rings
+  /// at the normal time.
+  final bool smartWakeDryRun;
+
   bool get hasCity => cityLat != null && cityLon != null;
 
   AppSettings copyWith({
@@ -76,6 +81,7 @@ class AppSettings {
     double? cityLat,
     double? cityLon,
     String? cityLabel,
+    bool? smartWakeDryRun,
     bool clearCity = false,
   }) =>
       AppSettings(
@@ -96,6 +102,7 @@ class AppSettings {
         cityLat: clearCity ? null : (cityLat ?? this.cityLat),
         cityLon: clearCity ? null : (cityLon ?? this.cityLon),
         cityLabel: clearCity ? '' : (cityLabel ?? this.cityLabel),
+        smartWakeDryRun: smartWakeDryRun ?? this.smartWakeDryRun,
       );
 
   Map<String, dynamic> toJson() => {
@@ -116,6 +123,7 @@ class AppSettings {
         'cityLat': cityLat,
         'cityLon': cityLon,
         'cityLabel': cityLabel,
+        'smartWakeDryRun': smartWakeDryRun,
       };
 
   factory AppSettings.fromJson(Map<String, dynamic> j) => AppSettings(
@@ -136,5 +144,6 @@ class AppSettings {
         cityLat: (j['cityLat'] as num?)?.toDouble(),
         cityLon: (j['cityLon'] as num?)?.toDouble(),
         cityLabel: j['cityLabel'] as String? ?? '',
+        smartWakeDryRun: j['smartWakeDryRun'] as bool? ?? true,
       );
 }

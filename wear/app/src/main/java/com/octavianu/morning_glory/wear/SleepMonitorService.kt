@@ -31,6 +31,8 @@ class SleepMonitorService : Service(), SensorEventListener {
     private var detector: LightSleepDetector? = null
     private var running = false
     private var finishing = false
+    private var dryWokeAt = 0L
+    private var dryReason = ""
 
     // epoch accumulation
     private var epochEnd = 0L
@@ -48,7 +50,12 @@ class SleepMonitorService : Service(), SensorEventListener {
             val p = plan ?: return
             val now = System.currentTimeMillis()
             if (now >= p.alarmTimeMillis) {
-                finish("finished", if (detector?.notWorn == true) "not_worn" else "no_light_sleep_found")
+                val reason = when {
+                    dryReason.isNotEmpty() -> dryReason
+                    detector?.notWorn == true -> "not_worn"
+                    else -> ""
+                }
+                finish("finished", reason)
                 return
             }
             flushIfDue(now)
@@ -97,6 +104,8 @@ class SleepMonitorService : Service(), SensorEventListener {
             this, if (missing) "no_permission" else "monitoring",
             if (missing) "no_hr_permission" else "", epochs = 0, wokeAt = 0L, hrAvailable = false,
         )
+        Store.setTrace(this, "")
+        Store.setSessionDry(this, p.dryRun)
         publish()
         handler.postDelayed(tick, 5_000L)
         return START_NOT_STICKY
@@ -170,21 +179,32 @@ class SleepMonitorService : Service(), SensorEventListener {
                 e.putBoolean("hrAvailable", true)
                 if (Store.state(this) == "no_permission") e.putString("state", "monitoring")
             }
+            e.putString("trace", detector?.trace ?: "")
             e.apply()
             if (d != null) {
-                onDecision(d.reason)
-                return
+                if (onDecision(d.reason)) return
             }
         }
         sumDev = 0.0; maxDev = 0.0; accCount = 0; hrSum = 0.0; hrCount = 0
         epochEnd = t + EPOCH_MS
     }
 
-    private fun onDecision(reason: String) {
-        val p = plan ?: return
+    /** Returns true when the session is ending (real wake), false in dry-run (keep monitoring). */
+    private fun onDecision(reason: String): Boolean {
+        val p = plan ?: return true
+        val at = System.currentTimeMillis()
+        val dry = Store.loadPlan(this)?.dryRun == true
+        Store.setSessionDry(this, dry)
+        if (dry) {
+            // Dry run: remember what would have happened, send nothing, do not vibrate.
+            dryWokeAt = at
+            dryReason = reason
+            Store.setState(this, Store.state(this), reason, wokeAt = at)
+            publish()
+            return false
+        }
         finishing = true
         stopSensors()
-        val at = System.currentTimeMillis()
         Status.vibrate(this)
         io.execute {
             val ok = Status.sendWake(this, p.alarmId, reason, at)
@@ -199,6 +219,7 @@ class SleepMonitorService : Service(), SensorEventListener {
                 shutDown()
             }
         }
+        return true
     }
 
     private fun finish(state: String, reason: String) {

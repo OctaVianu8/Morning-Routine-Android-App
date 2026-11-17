@@ -26,11 +26,27 @@ object PlanManager {
             Store.savePlan(ctx, null)
             Store.setWakeSent(ctx, false)
             Store.setState(ctx, "idle", epochs = 0, wokeAt = 0L)
+            Store.setTrace(ctx, "")
             Status.publish(ctx)
             return
         }
         val plan = incoming!!
         val same = old != null && old.alarmId == plan.alarmId && old.alarmTimeMillis == plan.alarmTimeMillis
+        if (same && old != plan && old != null && old.windowMinutes == plan.windowMinutes &&
+            old.dryRun != plan.dryRun
+        ) {
+            // Only the dry-run flag changed: update in place, keep a running session going.
+            Store.savePlan(ctx, plan)
+            if (Store.state(ctx) == "scheduled") arm(ctx, plan)
+            else if (Store.state(ctx) == "monitoring" || Store.state(ctx) == "no_permission") {
+                try {
+                    ContextCompat.startForegroundService(ctx, Intent(ctx, SleepMonitorService::class.java)
+                        .putExtra("dryRunChanged", true))
+                } catch (_: Throwable) {}
+            }
+            Status.publish(ctx)
+            return
+        }
         if (same && old == plan) {
             // Nothing changed; make sure the alarm exists but do not disturb a running service.
             if (Store.state(ctx) == "scheduled") arm(ctx, plan)
@@ -40,6 +56,7 @@ object PlanManager {
         if (!same) Store.setWakeSent(ctx, false)
         Store.savePlan(ctx, plan)
         Store.setState(ctx, "scheduled", epochs = 0, wokeAt = 0L)
+        Store.setTrace(ctx, "")
         arm(ctx, plan)
         Status.publish(ctx)
     }
@@ -96,7 +113,8 @@ object PlanManager {
 
     fun parse(item: com.google.android.gms.wearable.DataItem): Plan {
         val m = DataMapItem.fromDataItem(item).dataMap
-        return Plan(m.getInt("alarmId"), m.getLong("alarmTimeMillis"), m.getInt("windowMinutes"))
+        return Plan(m.getInt("alarmId"), m.getLong("alarmTimeMillis"), m.getInt("windowMinutes"),
+            if (m.containsKey("dryRun")) m.getBoolean("dryRun") else false)
     }
 
     /** Reads the current plan DataItem (events can be missed). Runs on a background thread. */

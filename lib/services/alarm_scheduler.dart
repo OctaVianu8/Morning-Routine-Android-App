@@ -6,7 +6,13 @@ import 'package:permission_handler/permission_handler.dart';
 
 import '../models/alarm_config.dart';
 import '../models/app_settings.dart';
+import 'alarm_sound_store.dart';
 import 'wear_service.dart';
+
+/// Audio path to schedule: the custom file only if it still exists, else the
+/// built-in asset, so an alarm is never silent.
+String resolveAlarmAudioPath(AlarmConfig a, {required bool customExists}) =>
+    (!a.hasCustomSound || customExists) ? a.audioPath : a.assetPath;
 
 /// Thin wrapper over the `alarm` package. Screens never schedule directly;
 /// AppState changes trigger [sync] (wired in main.dart).
@@ -88,10 +94,18 @@ class AlarmScheduler {
       try {
         final target = settings.pushupTarget;
         final n = a.pushupsOverride ?? target;
+        var customExists = true;
+        if (a.hasCustomSound) {
+          customExists = await AlarmSoundStore.instance.exists(a.customSoundPath!);
+          if (!customExists) {
+            debugPrint('Custom sound missing for alarm ${a.id} '
+                '(${a.customSoundPath}); using built-in sound');
+          }
+        }
         final next = AlarmSettings(
           id: a.id,
           dateTime: nextOccurrenceAfterEarlyWake(a, now, earlyWake),
-          assetAudioPath: a.assetPath,
+          assetAudioPath: resolveAlarmAudioPath(a, customExists: customExists),
           loopAudio: true,
           vibrate: settings.vibrate,
           volumeSettings: VolumeSettings.fixed(

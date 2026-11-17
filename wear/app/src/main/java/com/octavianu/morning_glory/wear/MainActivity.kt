@@ -77,11 +77,18 @@ class MainActivity : Activity(), SharedPreferences.OnSharedPreferenceChangeListe
             state == "monitoring" || state == "no_permission" ->
                 "Monitoring… ${Store.epochs(this) / 2} min of data"
             state == "woke" -> "Woke you at ${tf.format(Date(Store.wokeAt(this)))} (${Store.reason(this)})"
+            state == "finished" && Store.sessionDry(this) && Store.wokeAt(this) > 0L ->
+                "Would have woken you at ${tf.format(Date(Store.wokeAt(this)))} (${Store.reason(this)})"
+            state == "finished" && Store.reason(this).isEmpty() -> "No light sleep seen in the window"
             state == "finished" -> "Finished: ${Store.reason(this).replace('_', ' ')}"
             plan != null -> "Smart wake: ${tf.format(Date(plan.alarmTimeMillis))}, window ${plan.windowMinutes} min"
             else -> "No smart alarm set on the phone"
         }
+        val dryNote = "Dry run: recording only, the alarm will ring at the normal time"
         detailText.text = when {
+            plan?.dryRun == true && state == "monitoring" && Store.wokeAt(this) > 0L ->
+                "$dryNote\nWould have woken you at ${tf.format(Date(Store.wokeAt(this)))} (${Store.reason(this)})"
+            plan?.dryRun == true -> dryNote
             plan != null && (state == "monitoring" || state == "no_permission") ->
                 "Smart wake ${tf.format(Date(plan.alarmTimeMillis))}, window ${plan.windowMinutes} min" +
                     if (Store.hrAvailable(this)) ", heart rate on" else ", movement only"

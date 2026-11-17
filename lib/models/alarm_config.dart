@@ -1,3 +1,5 @@
+import 'dart:io' show Platform;
+
 /// A user-configured alarm. Stored as JSON; scheduling is done by AlarmScheduler.
 class AlarmConfig {
   AlarmConfig({
@@ -10,6 +12,8 @@ class AlarmConfig {
     this.pushupsOverride,
     this.sound = 'classic',
     this.smartWakeMinutes = 0,
+    this.customSoundPath,
+    this.customSoundName,
   }) : weekdays = weekdays ?? <int>{};
 
   /// Positive, stable, < 2^31 (used as the platform alarm id).
@@ -32,12 +36,37 @@ class AlarmConfig {
   /// the alarm early, never earlier than this long before the set time.
   final int smartWakeMinutes;
 
+  /// Absolute path of an imported audio file (see AlarmSoundStore); overrides
+  /// [sound] when set.
+  final String? customSoundPath;
+
+  /// Original file name of the custom sound, for display only.
+  final String? customSoundName;
+
+  bool get hasCustomSound => customSoundPath != null && customSoundPath!.isNotEmpty;
+
   static const Map<String, String> alarmSounds = {
     'classic': 'assets/sounds/alarm_classic.wav',
     'siren': 'assets/sounds/alarm_siren.wav',
   };
 
   String get assetPath => alarmSounds[sound] ?? alarmSounds['classic']!;
+
+  /// Path to hand to the alarm plugin: the custom file when set (in the form
+  /// the platform needs, see [deviceAudioPath]), else the built-in asset.
+  String get audioPath =>
+      hasCustomSound ? deviceAudioPath(customSoundPath!, ios: Platform.isIOS) : assetPath;
+
+  /// The alarm plugin takes an absolute path on Android, but on iOS resolves
+  /// anything not starting with `assets/` relative to the Documents directory
+  /// (the container UUID can change across updates), so strip the prefix.
+  static String deviceAudioPath(String absolutePath, {required bool ios}) {
+    if (!ios) return absolutePath;
+    const marker = '/Documents/';
+    final i = absolutePath.lastIndexOf(marker);
+    return i < 0 ? absolutePath : absolutePath.substring(i + marker.length);
+  }
+
   bool get repeats => weekdays.isNotEmpty;
 
   /// Next time this alarm should ring strictly after [now].
@@ -63,6 +92,9 @@ class AlarmConfig {
     bool clearPushupsOverride = false,
     String? sound,
     int? smartWakeMinutes,
+    String? customSoundPath,
+    String? customSoundName,
+    bool clearCustomSound = false,
   }) =>
       AlarmConfig(
         id: id,
@@ -75,6 +107,10 @@ class AlarmConfig {
             clearPushupsOverride ? null : (pushupsOverride ?? this.pushupsOverride),
         sound: sound ?? this.sound,
         smartWakeMinutes: smartWakeMinutes ?? this.smartWakeMinutes,
+        customSoundPath:
+            clearCustomSound ? null : (customSoundPath ?? this.customSoundPath),
+        customSoundName:
+            clearCustomSound ? null : (customSoundName ?? this.customSoundName),
       );
 
   Map<String, dynamic> toJson() => {
@@ -87,6 +123,8 @@ class AlarmConfig {
         'pushupsOverride': pushupsOverride,
         'sound': sound,
         'smartWakeMinutes': smartWakeMinutes,
+        'customSoundPath': customSoundPath,
+        'customSoundName': customSoundName,
       };
 
   factory AlarmConfig.fromJson(Map<String, dynamic> j) => AlarmConfig(
@@ -99,5 +137,7 @@ class AlarmConfig {
         pushupsOverride: j['pushupsOverride'] as int?,
         sound: j['sound'] as String? ?? 'classic',
         smartWakeMinutes: (j['smartWakeMinutes'] as num?)?.toInt() ?? 0,
+        customSoundPath: j['customSoundPath'] as String?,
+        customSoundName: j['customSoundName'] as String?,
       );
 }

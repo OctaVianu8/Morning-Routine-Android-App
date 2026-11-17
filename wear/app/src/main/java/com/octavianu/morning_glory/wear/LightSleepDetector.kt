@@ -50,10 +50,30 @@ class LightSleepDetector(
     val epochCount: Int get() = totalEpochs
     private var totalEpochs = 0
 
+    private val traceBuf = StringBuilder()
+
+    /**
+     * One character per epoch inside the window, chronological: '.' still, 'm' movement,
+     * 'h' still but heart rate risen, 'M' movement with heart rate risen.
+     */
+    val trace: String get() = traceBuf.toString()
+
+    /** Kind of the most recent epoch ('.', 'm', 'h', 'M'), also after the detector has fired. */
+    var lastEpochKind: Char = '.'
+        private set
+
     fun onEpoch(e: Epoch): Decision? {
         val stillLevel = if (preWindowEpochs >= config.minBaselineEpochs) stillLevel() else 0.0
         val hrBase = hrBase()
         val moving = isMovement(e, stillLevel)
+        val hrUp = e.hr != null && hrBase != null && e.hr >= hrBase * (1.0 + config.hrRise)
+        lastEpochKind = when {
+            moving && hrUp -> 'M'
+            moving -> 'm'
+            hrUp -> 'h'
+            else -> '.'
+        }
+        if (e.endMillis >= windowStartMillis && e.endMillis < alarmTimeMillis) traceBuf.append(lastEpochKind)
 
         // Record after classifying against the previous baseline.
         totalEpochs++
@@ -73,17 +93,11 @@ class LightSleepDetector(
         if (totalEpochs < config.minBaselineEpochs) return null
         if (notWorn) return null
 
-        if (moving && e.hr != null && hrBase != null &&
-            e.hr >= hrBase * (1.0 + config.hrRise)
-        ) {
-            fired = true
-            return Decision("movement+hr")
-        }
         val n = config.lastEpochsForVote
         val recent = moveFlags.takeLast(n)
         if (recent.count { it } >= config.votesNeeded) {
             fired = true
-            return Decision("movement")
+            return Decision(if (hrUp) "movement+hr" else "movement")
         }
         return null
     }

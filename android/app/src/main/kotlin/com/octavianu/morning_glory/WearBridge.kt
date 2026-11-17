@@ -5,12 +5,15 @@ import android.util.Log
 import com.google.android.gms.tasks.Task
 import com.google.android.gms.tasks.Tasks
 import com.google.android.gms.wearable.CapabilityClient
+import com.google.android.gms.wearable.DataMap
 import com.google.android.gms.wearable.DataMapItem
 import com.google.android.gms.wearable.PutDataMapRequest
 import com.google.android.gms.wearable.Wearable
 import io.flutter.plugin.common.BinaryMessenger
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
+import org.json.JSONArray
+import org.json.JSONObject
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
@@ -34,6 +37,9 @@ object WearBridge {
     const val K_PLAN_ID = "plan_alarmId"
     const val K_PLAN_TIME = "plan_alarmTimeMillis"
     const val K_PLAN_WINDOW = "plan_windowMinutes"
+    const val K_PLAN_DRY = "plan_dryRun"
+    const val K_HISTORY = "night_history"
+    private const val HISTORY_MAX = 30
     const val K_WAKE_AT = "lastEarlyWakeAt"
     const val K_WAKE_REASON = "lastEarlyWakeReason"
     const val K_WAKE_ALARM = "lastEarlyWakeAlarmId"
@@ -73,6 +79,7 @@ object WearBridge {
         "status" -> mapOf<String, Any?>("watchReachable" to false)
         "lastEarlyWake" -> emptyMap<String, Any?>()
         "syncPlan" -> false
+        "history" -> "[]"
         else -> null
     }
 
@@ -82,7 +89,13 @@ object WearBridge {
             (call.argument<Number>("alarmId") ?: 0).toInt(),
             (call.argument<Number>("alarmTimeMillis") ?: 0L).toLong(),
             (call.argument<Number>("windowMinutes") ?: 0).toInt(),
+            call.argument<Boolean>("dryRun") ?: false,
         )
+        "history" -> history(ctx)
+        "clearHistory" -> {
+            ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().remove(K_HISTORY).apply()
+            null
+        }
         "ping" -> ping(ctx)
         "status" -> status(ctx)
         "lastEarlyWake" -> lastEarlyWake(ctx)
@@ -96,7 +109,7 @@ object WearBridge {
         null
     }
 
-    private fun syncPlan(ctx: Context, alarmId: Int, timeMillis: Long, windowMinutes: Int): Boolean {
+    private fun syncPlan(ctx: Context, alarmId: Int, timeMillis: Long, windowMinutes: Int, dryRun: Boolean): Boolean {
         val window = windowMinutes.coerceIn(0, 60)
         // Persist first: the listener validates early-wake messages against this
         // even if the watch is offline now or the app process is dead later.
@@ -104,11 +117,13 @@ object WearBridge {
             .putInt(K_PLAN_ID, alarmId)
             .putLong(K_PLAN_TIME, timeMillis)
             .putInt(K_PLAN_WINDOW, window)
+            .putBoolean(K_PLAN_DRY, dryRun)
             .apply()
         val req = PutDataMapRequest.create(PATH_PLAN).apply {
             dataMap.putInt("alarmId", alarmId)
             dataMap.putLong("alarmTimeMillis", timeMillis)
             dataMap.putInt("windowMinutes", window)
+            dataMap.putBoolean("dryRun", dryRun)
             dataMap.putLong("updatedAt", System.currentTimeMillis())
         }.asPutDataRequest().setUrgent()
         return await(Wearable.getDataClient(ctx).putDataItem(req)) != null
@@ -186,5 +201,42 @@ object WearBridge {
             "lastEarlyWakeAlarmId" to prefs.getInt(K_WAKE_ALARM, 0),
             "lastEarlyWakePlannedAt" to prefs.getLong(K_WAKE_PLANNED, 0L),
         )
+    }
+
+    /** Newest-30 night records as a JSON array string ("[]" when none). */
+    private fun history(ctx: Context): String =
+        ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(K_HISTORY, null) ?: "[]"
+
+    /** Upserts one finished night (keyed by alarmTimeMillis) from a status DataMap. */
+    @Synchronized
+    fun recordNight(ctx: Context, m: DataMap) {
+        val alarmTime = m.getLong("alarmTimeMillis")
+        if (alarmTime <= 0L) return
+        val night = JSONObject()
+            .put("alarmTimeMillis", alarmTime)
+            .put("windowMinutes", m.getInt("windowMinutes"))
+            .put("dryRun", m.getBoolean("dryRun"))
+            .put("wokeAt", m.getLong("wokeAt"))
+            .put("reason", m.getString("reason", ""))
+            .put("trace", m.getString("trace", ""))
+            .put("epochs", m.getInt("epochs"))
+            .put("hrAvailable", m.getBoolean("hrAvailable"))
+        val prefs = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val items = ArrayList<JSONObject>()
+        try {
+            val old = JSONArray(prefs.getString(K_HISTORY, null) ?: "[]")
+            for (i in 0 until old.length()) {
+                val o = old.optJSONObject(i) ?: continue
+                if (o.optLong("alarmTimeMillis") != alarmTime) items.add(o)
+            }
+        } catch (t: Throwable) {
+            Log.w(TAG, "history parse failed, starting over", t)
+        }
+        items.add(night)
+        items.sortBy { it.optLong("alarmTimeMillis") }
+        val kept = items.takeLast(HISTORY_MAX)
+        val out = JSONArray()
+        for (o in kept) out.put(o)
+        prefs.edit().putString(K_HISTORY, out.toString()).apply()
     }
 }

@@ -56,12 +56,64 @@ class LightSleepDetectorTest {
         assertEquals("movement", r!!.reason)
     }
 
-    @Test fun singleMovementPlusHrRise_triggersMovementHr() {
+    @Test fun singleMovementPlusBigHrRise_doesNotFire() {
         val d = detector()
         assertNull(runStill(d, monitorStart + step, windowStart + 5 * min, hr = 55.0))
-        val r = d.onEpoch(move(windowStart + 5 * min + step, hr = 62.0))
-        assertNotNull(r)
-        assertEquals("movement+hr", r!!.reason)
+        assertNull(d.onEpoch(move(windowStart + 5 * min + step, hr = 80.0)))
+        assertEquals('M', d.lastEpochKind)
+        assertNull(runStill(d, windowStart + 5 * min + 2 * step, windowStart + 5 * min + 4 * step, hr = 55.0))
+    }
+
+    @Test fun twoOfFourWithHrRise_movementHr() {
+        val d = detector()
+        assertNull(runStill(d, monitorStart + step, windowStart + 5 * min, hr = 55.0))
+        var e = windowStart + 5 * min + step
+        assertNull(d.onEpoch(move(e, hr = 55.0))); e += step
+        assertNull(d.onEpoch(still(e, hr = 55.0))); e += step
+        assertEquals("movement+hr", d.onEpoch(move(e, hr = 62.0))?.reason)
+    }
+
+    @Test fun twoOfFourWithoutHrRise_movement() {
+        val d = detector()
+        assertNull(runStill(d, monitorStart + step, windowStart + 5 * min, hr = 55.0))
+        var e = windowStart + 5 * min + step
+        assertNull(d.onEpoch(move(e, hr = 55.0))); e += step
+        assertEquals("movement", d.onEpoch(move(e, hr = 56.0))?.reason)
+    }
+
+    @Test fun trace_charactersAndEmptyBeforeWindow() {
+        val d = detector()
+        assertNull(runStill(d, monitorStart + step, windowStart - step, hr = 55.0))
+        assertEquals("", d.trace)
+        var e = windowStart
+        d.onEpoch(still(e, hr = 55.0)); e += step          // .
+        d.onEpoch(still(e, hr = 70.0)); e += step          // h
+        d.onEpoch(move(e, hr = 55.0))                      // m (fires? only 1 vote)
+        e += step
+        d.onEpoch(still(e, hr = 55.0)); e += step          // .
+        val r = d.onEpoch(move(e, hr = 70.0))              // M, second vote -> fires
+        assertEquals("movement+hr", r?.reason)
+        assertEquals(".hm.M", d.trace)
+    }
+
+    @Test fun classificationContinuesAfterFiring() {
+        val d = detector()
+        assertNull(runStill(d, monitorStart + step, windowStart + 5 * min, hr = 55.0))
+        var e = windowStart + 5 * min + step
+        d.onEpoch(move(e, hr = 55.0)); e += step
+        assertNotNull(d.onEpoch(move(e, hr = 55.0))); e += step
+        assertNull(d.onEpoch(still(e, hr = 55.0))); e += step
+        assertEquals('.', d.lastEpochKind)
+        assertNull(d.onEpoch(move(e, hr = 70.0)))
+        assertEquals('M', d.lastEpochKind)
+        assertEquals("mm.M", d.trace.takeLast(4))
+    }
+
+    @Test fun traceStopsAtAlarmTime() {
+        val d = detector()
+        var e = monitorStart + step
+        while (e <= t + 2 * step) { d.onEpoch(still(e)); e += step }
+        assertEquals(w * 2, d.trace.length)
     }
 
     @Test fun singleIsolatedMovementWithoutHr_noTrigger() {
