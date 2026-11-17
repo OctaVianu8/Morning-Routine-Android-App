@@ -31,11 +31,25 @@ android {
         multiDexEnabled = true
     }
 
+    // One fixed development key, checked into the repo, signs the phone app and
+    // the watch app. The Wear OS data layer only connects apps that share a
+    // package name AND signature, and a stable key lets new builds install
+    // over old ones. Replace with a private key before any store release.
+    signingConfigs {
+        create("dev") {
+            storeFile = rootProject.file("keystore/dev.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
+    }
+
     buildTypes {
+        debug {
+            signingConfig = signingConfigs.getByName("dev")
+        }
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.getByName("dev")
             // Code shrinking is off on purpose: the alarm and ML Kit plugins
             // use reflection, and a stripped class would only show up as an
             // alarm that fails to ring.
