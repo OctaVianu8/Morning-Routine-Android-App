@@ -11,6 +11,7 @@ import 'services/app_state.dart';
 import 'services/reminder_service.dart';
 import 'services/sound_service.dart';
 import 'services/tts_service.dart';
+import 'services/wear_service.dart';
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
@@ -38,6 +39,7 @@ Future<void> main() async {
       await AlarmScheduler.instance.requestPermissions();
     }
     await AlarmScheduler.instance.sync(state.alarms, state.settings);
+    await WearService.instance.syncPlan(state.alarms);
   }
 
   state.onAlarmsChanged = syncAlarms;
@@ -85,6 +87,7 @@ class _MorningGloryAppState extends State<MorningGloryApp> with WidgetsBindingOb
     // Repeating alarms are re-armed from Dart, so top up whenever we come back.
     final app = context.read<AppState>();
     unawaited(AlarmScheduler.instance.sync(app.alarms, app.settings));
+    unawaited(WearService.instance.syncPlan(app.alarms));
   }
 
   Future<void> _checkRinging() async =>

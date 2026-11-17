@@ -9,6 +9,7 @@ class AlarmConfig {
     this.label = '',
     this.pushupsOverride,
     this.sound = 'classic',
+    this.smartWakeMinutes = 0,
   }) : weekdays = weekdays ?? <int>{};
 
   /// Positive, stable, < 2^31 (used as the platform alarm id).
@@ -26,6 +27,10 @@ class AlarmConfig {
 
   /// Key into [alarmSounds].
   final String sound;
+
+  /// Smart wake window in minutes (0 = off, max 60): a paired watch may ring
+  /// the alarm early, never earlier than this long before the set time.
+  final int smartWakeMinutes;
 
   static const Map<String, String> alarmSounds = {
     'classic': 'assets/sounds/alarm_classic.wav',
@@ -57,6 +62,7 @@ class AlarmConfig {
     int? pushupsOverride,
     bool clearPushupsOverride = false,
     String? sound,
+    int? smartWakeMinutes,
   }) =>
       AlarmConfig(
         id: id,
@@ -68,6 +74,7 @@ class AlarmConfig {
         pushupsOverride:
             clearPushupsOverride ? null : (pushupsOverride ?? this.pushupsOverride),
         sound: sound ?? this.sound,
+        smartWakeMinutes: smartWakeMinutes ?? this.smartWakeMinutes,
       );
 
   Map<String, dynamic> toJson() => {
@@ -79,6 +86,7 @@ class AlarmConfig {
         'label': label,
         'pushupsOverride': pushupsOverride,
         'sound': sound,
+        'smartWakeMinutes': smartWakeMinutes,
       };
 
   factory AlarmConfig.fromJson(Map<String, dynamic> j) => AlarmConfig(
@@ -90,5 +98,6 @@ class AlarmConfig {
         label: j['label'] as String? ?? '',
         pushupsOverride: j['pushupsOverride'] as int?,
         sound: j['sound'] as String? ?? 'classic',
+        smartWakeMinutes: (j['smartWakeMinutes'] as num?)?.toInt() ?? 0,
       );
 }

@@ -114,12 +114,23 @@ class AlarmsScreen extends StatelessWidget {
                             style: tt.displaySmall?.copyWith(
                                 color: a.enabled ? cs.onSurface : cs.onSurfaceVariant)),
                         const SizedBox(height: 4),
-                        Text(
-                          [
-                            if (a.label.isNotEmpty) a.label,
-                            repeatSummary(a.weekdays),
-                            '${app.pushupTargetFor(a.id)} pushups',
-                          ].join(' · '),
+                        Text.rich(
+                          TextSpan(children: [
+                            TextSpan(
+                                text: [
+                              if (a.label.isNotEmpty) a.label,
+                              repeatSummary(a.weekdays),
+                              '${app.pushupTargetFor(a.id)} pushups',
+                            ].join(' · ')),
+                            if (a.smartWakeMinutes > 0) ...[
+                              const TextSpan(text: ' · '),
+                              WidgetSpan(
+                                  alignment: PlaceholderAlignment.middle,
+                                  child: Icon(Icons.watch_outlined,
+                                      size: 16, color: cs.onSurfaceVariant)),
+                              TextSpan(text: ' \u2264 ${a.smartWakeMinutes} min early'),
+                            ],
+                          ]),
                           style: tt.bodyMedium?.copyWith(color: cs.onSurfaceVariant),
                         ),
                       ]),

@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../models/alarm_config.dart';
 import '../services/app_state.dart';
+import '../services/wear_service.dart';
 import 'alarms_screen.dart';
 
 class AlarmEditScreen extends StatefulWidget {
@@ -20,6 +21,8 @@ class _AlarmEditScreenState extends State<AlarmEditScreen> {
   late String _sound;
   late bool _useDefault;
   late int _pushups;
+  late int _smart;
+  bool _watchReachable = true;
 
   @override
   void initState() {
@@ -34,6 +37,15 @@ class _AlarmEditScreenState extends State<AlarmEditScreen> {
     _sound = e?.sound ?? 'classic';
     _useDefault = e?.pushupsOverride == null;
     _pushups = e?.pushupsOverride ?? app.settings.pushupTarget;
+    _smart = (e?.smartWakeMinutes ?? 0).clamp(0, 60);
+    _checkWatch();
+  }
+
+  Future<void> _checkWatch() async {
+    final st = await WearService.instance.status();
+    if (!mounted) return;
+    // Only show the hint when the platform really answered "no watch".
+    setState(() => _watchReachable = st.watchReachable);
   }
 
   @override
@@ -59,6 +71,7 @@ class _AlarmEditScreenState extends State<AlarmEditScreen> {
       label: _label.text.trim(),
       pushupsOverride: _useDefault ? null : _pushups,
       sound: _sound,
+      smartWakeMinutes: _smart,
     );
     app.upsertAlarm(alarm);
     final rel = relativeTime(alarm.nextOccurrence(DateTime.now()).difference(DateTime.now()));
@@ -168,6 +181,35 @@ class _AlarmEditScreenState extends State<AlarmEditScreen> {
                   width: 36,
                   child: Text('$_pushups', style: tt.titleMedium, textAlign: TextAlign.end)),
             ]),
+          const SizedBox(height: 16),
+          Text('Smart wake-up (watch)', style: tt.titleSmall),
+          Row(children: [
+            Expanded(
+              child: Slider(
+                min: 0,
+                max: 60,
+                divisions: 12,
+                value: _smart.toDouble(),
+                label: _smart == 0 ? 'Off' : '$_smart min',
+                onChanged: (v) => setState(() => _smart = (v / 5).round() * 5),
+              ),
+            ),
+            SizedBox(
+                width: 56,
+                child: Text(_smart == 0 ? 'Off' : '$_smart min',
+                    style: tt.titleMedium, textAlign: TextAlign.end)),
+          ]),
+          Text(
+              _smart == 0
+                  ? 'Off'
+                  : 'Ring up to $_smart min early when your watch detects light sleep',
+              style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant)),
+          if (_smart > 0 && !_watchReachable)
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Text('No watch connected \u2014 the alarm will ring at the set time',
+                  style: tt.bodySmall?.copyWith(color: cs.error)),
+            ),
           const SizedBox(height: 24),
           FilledButton.icon(
             onPressed: _save,

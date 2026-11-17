@@ -6,6 +6,7 @@ import 'package:permission_handler/permission_handler.dart';
 
 import '../models/alarm_config.dart';
 import '../models/app_settings.dart';
+import 'wear_service.dart';
 
 /// Thin wrapper over the `alarm` package. Screens never schedule directly;
 /// AppState changes trigger [sync] (wired in main.dart).
@@ -80,6 +81,8 @@ class AlarmScheduler {
       }
     }
 
+    EarlyWake? earlyWake;
+    var earlyWakeLoaded = false;
     for (final a in wanted.values) {
       if (ringing.contains(a.id)) continue;
       try {
@@ -107,6 +110,26 @@ class AlarmScheduler {
             androidStopAlarmOnDismiss: false,
           ),
         );
+        // A watch may have pulled this alarm forward natively (stored time is
+        // now+6 s, earlier than the next regular occurrence) while the app was
+        // dead. Re-setting it to the regular time would silence that early
+        // ring as the app opens, so leave it alone; see keepPulledForwardAlarm.
+        final stored = existing.where((e) => e.id == a.id).firstOrNull;
+        if (stored != null && stored.dateTime.isBefore(next.dateTime)) {
+          if (!earlyWakeLoaded) {
+            earlyWakeLoaded = true;
+            earlyWake = await WearService.instance.lastEarlyWake();
+          }
+          if (keepPulledForwardAlarm(
+            alarmId: a.id,
+            existingDateTime: stored.dateTime,
+            nextOccurrence: next.dateTime,
+            now: now,
+            lastEarlyWake: earlyWake,
+          )) {
+            continue;
+          }
+        }
         final same = existing.any((e) =>
             e.id == next.id &&
             e.dateTime.isAtSameMomentAs(next.dateTime) &&

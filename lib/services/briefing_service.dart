@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import 'app_state.dart';
 import 'calendar_service.dart';
 import 'tts_service.dart';
+import 'wear_service.dart';
 import 'weather_service.dart';
 
 /// Everything the spoken briefing is composed from.
@@ -21,6 +22,7 @@ class BriefingData {
     this.streak = 0,
     this.todayPerfect = false,
     this.afterAlarm = false,
+    this.earlyWakeMinutes,
   });
 
   final DateTime now;
@@ -35,6 +37,10 @@ class BriefingData {
   final int streak;
   final bool todayPerfect;
   final bool afterAlarm;
+
+  /// Minutes the watch woke the user before the set time (only when it
+  /// happened within the last 30 minutes), else null.
+  final int? earlyWakeMinutes;
 }
 
 const _closers = [
@@ -83,6 +89,11 @@ String composeBriefing(BriefingData d) {
   final name = d.userName.trim();
   final greet = name.isEmpty ? 'Good $part!' : 'Good $part, $name!';
   out.add(d.afterAlarm ? '$greet Alarm off, now up and at it.' : greet);
+  final early = d.earlyWakeMinutes;
+  if (early != null && early >= 1) {
+    out.add('Your watch caught you in light sleep and woke you '
+        '$early ${early == 1 ? 'minute' : 'minutes'} early.');
+  }
 
   // Date
   out.add("It's ${DateFormat('EEEE, MMMM d', 'en_US').format(now)}.");
@@ -179,6 +190,14 @@ class BriefingService {
       debugPrint('BriefingService.gather: $e');
     }
 
+    int? earlyMinutes;
+    try {
+      final w = await WearService.instance.lastEarlyWake();
+      if (w?.at != null && now.difference(w!.at!) <= const Duration(minutes: 30)) {
+        earlyMinutes = w.minutesEarly;
+      }
+    } catch (_) {}
+
     final habits = app.enabledHabits;
     return BriefingData(
       now: now,
@@ -192,6 +211,7 @@ class BriefingService {
       streak: app.streak,
       todayPerfect: app.isPerfectDay(DateTime(now.year, now.month, now.day)),
       afterAlarm: afterAlarm,
+      earlyWakeMinutes: earlyMinutes,
     );
   }
 
