@@ -412,11 +412,7 @@ class _BriefingSettingsState extends State<_BriefingSettings> {
   Future<void> _setCalendar(bool on) async {
     final app = context.read<AppState>();
     final messenger = ScaffoldMessenger.of(context);
-    if (on && !await CalendarService.instance.requestPermission()) {
-      messenger.showSnackBar(
-          const SnackBar(content: Text('Calendar permission was not granted')));
-      return;
-    }
+    if (on && !await CalendarService.instance.connect(messenger)) return;
     app.updateSettings(app.settings.copyWith(briefingCalendar: on));
   }
 

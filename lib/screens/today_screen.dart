@@ -289,8 +289,8 @@ class _BriefingCardState extends State<_BriefingCard> with WidgetsBindingObserve
   }
 
   Future<void> _connect() async {
-    await CalendarService.instance.requestPermission();
-    await _load();
+    await CalendarService.instance.connect(ScaffoldMessenger.of(context));
+    if (mounted) await _load();
   }
 
   Future<void> _play() async {
