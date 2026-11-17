@@ -11,6 +11,7 @@ import '../pushup/pose_camera_view.dart';
 import '../pushup/pushup_counter.dart';
 import '../services/alarm_scheduler.dart';
 import '../services/app_state.dart';
+import '../services/briefing_service.dart';
 import '../services/sound_service.dart';
 import '../services/tts_service.dart';
 import 'math_challenge_screen.dart';
@@ -55,6 +56,7 @@ class _RingScreenState extends State<RingScreen> {
       if (mounted) setState(() => _now = DateTime.now());
     });
     if (!widget.practice) {
+      BriefingService.instance.prefetch(_app);
       final t = DateFormat.jm().format(_opened);
       TtsService.instance
           .speak("Good morning! It's $t. Do $_target pushups to stop the alarm.");
@@ -92,7 +94,9 @@ class _RingScreenState extends State<RingScreen> {
       if (alarm != null) {
         _app.upsertAlarm(alarm.repeats ? alarm : alarm.copyWith(enabled: false));
       }
-      if (settings.speakHabitsAfterAlarm) {
+      if (settings.briefingEnabled) {
+        unawaited(BriefingService.instance.speak(_app, afterAlarm: true));
+      } else if (settings.speakHabitsAfterAlarm) {
         final remaining = _app.enabledHabits
             .where((h) => !_app.isDone(h.id))
             .map((h) => h.title)

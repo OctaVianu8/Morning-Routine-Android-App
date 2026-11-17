@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:material_ui/material_ui.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:provider/provider.dart';
@@ -5,6 +7,9 @@ import 'package:provider/provider.dart';
 import '../models/app_settings.dart';
 import '../services/alarm_scheduler.dart';
 import '../services/app_state.dart';
+import '../services/briefing_service.dart';
+import '../services/calendar_service.dart';
+import '../services/weather_service.dart';
 import '../services/reminder_service.dart';
 import '../services/tts_service.dart';
 import 'ring_screen.dart';
@@ -88,8 +93,11 @@ class SettingsScreen extends StatelessWidget {
         ),
         SwitchListTile(
           title: const Text('Read remaining habits after alarm'),
+          subtitle: st.briefingEnabled
+              ? const Text('The morning briefing replaces this while it is on.')
+              : null,
           value: st.speakHabitsAfterAlarm,
-          onChanged: st.voiceEnabled
+          onChanged: st.voiceEnabled && !st.briefingEnabled
               ? (v) => update(st.copyWith(speakHabitsAfterAlarm: v))
               : null,
         ),
@@ -99,6 +107,8 @@ class SettingsScreen extends StatelessWidget {
           onTap: () => TtsService.instance
               .speak('Good morning! Time to do ${st.pushupTarget} pushups.'),
         ),
+        const _Header('Morning briefing'),
+        const _BriefingSettings(),
         const _Header('Permissions'),
         ListTile(
           leading: const Icon(Icons.verified_user_outlined),
@@ -207,6 +217,144 @@ class _SliderTileState extends State<_SliderTile> {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _BriefingSettings extends StatefulWidget {
+  const _BriefingSettings();
+
+  @override
+  State<_BriefingSettings> createState() => _BriefingSettingsState();
+}
+
+class _BriefingSettingsState extends State<_BriefingSettings> {
+  late final TextEditingController _name;
+  late final TextEditingController _city;
+  final _nameFocus = FocusNode();
+  bool _looking = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final st = context.read<AppState>().settings;
+    _name = TextEditingController(text: st.userName);
+    _city = TextEditingController(text: st.city);
+    _nameFocus.addListener(() {
+      if (!_nameFocus.hasFocus) _saveName();
+    });
+  }
+
+  @override
+  void dispose() {
+    _name.dispose();
+    _city.dispose();
+    _nameFocus.dispose();
+    super.dispose();
+  }
+
+  void _saveName() {
+    final app = context.read<AppState>();
+    final v = _name.text.trim();
+    if (v != app.settings.userName) app.updateSettings(app.settings.copyWith(userName: v));
+  }
+
+  Future<void> _lookUp() async {
+    final app = context.read<AppState>();
+    final messenger = ScaffoldMessenger.of(context);
+    final text = _city.text.trim();
+    if (text.isEmpty) {
+      app.updateSettings(app.settings.copyWith(clearCity: true));
+      return;
+    }
+    setState(() => _looking = true);
+    final r = await WeatherService.instance.geocode(text);
+    if (!mounted) return;
+    setState(() => _looking = false);
+    if (r == null) {
+      messenger.showSnackBar(
+          const SnackBar(content: Text("City not found (or you're offline)")));
+      return;
+    }
+    app.updateSettings(app.settings
+        .copyWith(city: text, cityLat: r.lat, cityLon: r.lon, cityLabel: r.label));
+  }
+
+  Future<void> _setCalendar(bool on) async {
+    final app = context.read<AppState>();
+    final messenger = ScaffoldMessenger.of(context);
+    if (on && !await CalendarService.instance.requestPermission()) {
+      messenger.showSnackBar(
+          const SnackBar(content: Text('Calendar permission was not granted')));
+      return;
+    }
+    app.updateSettings(app.settings.copyWith(briefingCalendar: on));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final app = context.watch<AppState>();
+    final st = app.settings;
+    return Column(
+      children: [
+        SwitchListTile(
+          title: const Text('Speak a briefing after the alarm'),
+          subtitle: const Text('Date, weather, calendar, habits and streak.'),
+          value: st.briefingEnabled,
+          onChanged: (v) => app.updateSettings(st.copyWith(briefingEnabled: v)),
+        ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+          child: TextField(
+            controller: _name,
+            focusNode: _nameFocus,
+            enabled: st.briefingEnabled,
+            textCapitalization: TextCapitalization.words,
+            decoration: const InputDecoration(labelText: 'Your name'),
+            onSubmitted: (_) => _saveName(),
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+          child: TextField(
+            controller: _city,
+            enabled: st.briefingEnabled,
+            textCapitalization: TextCapitalization.words,
+            decoration: InputDecoration(
+              labelText: 'City for weather',
+              helperText: st.cityLabel.isEmpty ? null : st.cityLabel,
+              suffixIcon: _looking
+                  ? const Padding(
+                      padding: EdgeInsets.all(12),
+                      child: SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2)))
+                  : TextButton(onPressed: _lookUp, child: const Text('Look up')),
+            ),
+            onSubmitted: (_) => _lookUp(),
+          ),
+        ),
+        SwitchListTile(
+          title: const Text('Include weather'),
+          subtitle: const Text('Sends only your city name and its coordinates to Open-Meteo.'),
+          value: st.briefingWeather,
+          onChanged: st.briefingEnabled
+              ? (v) => app.updateSettings(st.copyWith(briefingWeather: v))
+              : null,
+        ),
+        SwitchListTile(
+          title: const Text('Include calendar events'),
+          subtitle: const Text('Read on the phone only; never uploaded.'),
+          value: st.briefingCalendar,
+          onChanged: st.briefingEnabled ? _setCalendar : null,
+        ),
+        ListTile(
+          leading: const Icon(Icons.play_circle_outline),
+          title: const Text('Play briefing now'),
+          onTap: () => unawaited(BriefingService.instance.speak(app)),
+        ),
+      ],
     );
   }
 }

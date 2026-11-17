@@ -9,6 +9,14 @@ class AppSettings {
     this.speakHabitsAfterAlarm = true,
     this.alarmVolume = 1.0,
     this.vibrate = true,
+    this.briefingEnabled = true,
+    this.userName = '',
+    this.briefingWeather = true,
+    this.briefingCalendar = true,
+    this.city = '',
+    this.cityLat,
+    this.cityLon,
+    this.cityLabel = '',
   });
 
   /// Pushups needed to stop an alarm (1..100).
@@ -36,6 +44,20 @@ class AppSettings {
   final double alarmVolume;
   final bool vibrate;
 
+  /// Speak the morning briefing after the alarm / on demand.
+  final bool briefingEnabled;
+  final String userName;
+  final bool briefingWeather;
+  final bool briefingCalendar;
+
+  /// City typed by the user; coordinates and label come from geocoding.
+  final String city;
+  final double? cityLat;
+  final double? cityLon;
+  final String cityLabel;
+
+  bool get hasCity => cityLat != null && cityLon != null;
+
   AppSettings copyWith({
     int? pushupTarget,
     bool? fallbackEnabled,
@@ -46,6 +68,15 @@ class AppSettings {
     bool? speakHabitsAfterAlarm,
     double? alarmVolume,
     bool? vibrate,
+    bool? briefingEnabled,
+    String? userName,
+    bool? briefingWeather,
+    bool? briefingCalendar,
+    String? city,
+    double? cityLat,
+    double? cityLon,
+    String? cityLabel,
+    bool clearCity = false,
   }) =>
       AppSettings(
         pushupTarget: pushupTarget ?? this.pushupTarget,
@@ -57,6 +88,14 @@ class AppSettings {
         speakHabitsAfterAlarm: speakHabitsAfterAlarm ?? this.speakHabitsAfterAlarm,
         alarmVolume: alarmVolume ?? this.alarmVolume,
         vibrate: vibrate ?? this.vibrate,
+        briefingEnabled: briefingEnabled ?? this.briefingEnabled,
+        userName: userName ?? this.userName,
+        briefingWeather: briefingWeather ?? this.briefingWeather,
+        briefingCalendar: briefingCalendar ?? this.briefingCalendar,
+        city: clearCity ? '' : (city ?? this.city),
+        cityLat: clearCity ? null : (cityLat ?? this.cityLat),
+        cityLon: clearCity ? null : (cityLon ?? this.cityLon),
+        cityLabel: clearCity ? '' : (cityLabel ?? this.cityLabel),
       );
 
   Map<String, dynamic> toJson() => {
@@ -69,6 +108,14 @@ class AppSettings {
         'speakHabitsAfterAlarm': speakHabitsAfterAlarm,
         'alarmVolume': alarmVolume,
         'vibrate': vibrate,
+        'briefingEnabled': briefingEnabled,
+        'userName': userName,
+        'briefingWeather': briefingWeather,
+        'briefingCalendar': briefingCalendar,
+        'city': city,
+        'cityLat': cityLat,
+        'cityLon': cityLon,
+        'cityLabel': cityLabel,
       };
 
   factory AppSettings.fromJson(Map<String, dynamic> j) => AppSettings(
@@ -81,5 +128,13 @@ class AppSettings {
         speakHabitsAfterAlarm: j['speakHabitsAfterAlarm'] as bool? ?? true,
         alarmVolume: (j['alarmVolume'] as num?)?.toDouble() ?? 1.0,
         vibrate: j['vibrate'] as bool? ?? true,
+        briefingEnabled: j['briefingEnabled'] as bool? ?? true,
+        userName: j['userName'] as String? ?? '',
+        briefingWeather: j['briefingWeather'] as bool? ?? true,
+        briefingCalendar: j['briefingCalendar'] as bool? ?? true,
+        city: j['city'] as String? ?? '',
+        cityLat: (j['cityLat'] as num?)?.toDouble(),
+        cityLon: (j['cityLon'] as num?)?.toDouble(),
+        cityLabel: j['cityLabel'] as String? ?? '',
       );
 }

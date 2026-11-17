@@ -66,6 +66,10 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+	<key>NSCalendarsFullAccessUsageDescription</key>
+	<string>MorningGlory reads today&apos;s events to include them in your spoken morning briefing. Calendar data stays on your phone.</string>
+	<key>NSCalendarsUsageDescription</key>
+	<string>MorningGlory reads today&apos;s events to include them in your spoken morning briefing. Calendar data stays on your phone.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>MorningGlory uses the camera to count your pushups on-device. Video never leaves your phone.</string>
 	<key>UIBackgroundModes</key>

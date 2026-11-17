@@ -28,6 +28,13 @@ Built with Flutter: Android today, iOS from the same codebase.
   tab shows an animated flame, the last seven days, your best streak and the
   next milestone (3, 7, 14, 30, …); completing the routine triggers a confetti
   celebration with sound, haptics and voice.
+- **Morning briefing** – after the alarm stops (or on demand from the Today
+  tab) the phone speaks a natural briefing composed from real data, no LLM:
+  greeting with your name, date, weather, today's calendar events, remaining
+  habits, streak and next alarm. Weather comes from Open-Meteo (no API key) and
+  only the city name you type (geocoding) and its coordinates (forecast) leave
+  the device; no device location is used. Calendar events are read on the
+  device and never uploaded.
 - **Practice mode** – try the pushup counter without an alarm.
 
 ## Project layout
@@ -41,6 +48,9 @@ lib/
     alarm_scheduler.dart     wraps the `alarm` plugin; keeps the OS schedule in sync
     reminder_service.dart    daily habit notifications
     tts_service.dart         text-to-speech
+    briefing_service.dart    composes + speaks the morning briefing (pure composer, unit tested)
+    weather_service.dart     Open-Meteo geocoding + forecast (cached, offline-safe)
+    calendar_service.dart    today's events from the device calendar (read-only)
     sound_service.dart       chime / success sounds
   pushup/
     pushup_counter.dart      pure-Dart rep state machine (unit tested)
