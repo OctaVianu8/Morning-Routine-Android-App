@@ -20,7 +20,6 @@ class BriefingData {
     this.totalHabits = 0,
     this.streak = 0,
     this.todayPerfect = false,
-    this.nextAlarm,
     this.afterAlarm = false,
   });
 
@@ -35,18 +34,21 @@ class BriefingData {
   final int totalHabits;
   final int streak;
   final bool todayPerfect;
-  final DateTime? nextAlarm;
   final bool afterAlarm;
 }
 
 const _closers = [
-  'Have a great day.',
-  'Make today count.',
-  'Go get it.',
-  'You have got this.',
-  'Enjoy your day.',
-  'Make it a good one.',
+  'Now move!',
+  'Go win the day.',
+  'No snoozing through life. Go.',
+  'Make it count. Go.',
+  'The day will not wait. Go.',
+  'Clock is ticking. Go get it.',
 ];
+
+const _words = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten'];
+String _word(int n) => n >= 0 && n < _words.length ? _words[n] : '$n';
+String _cap(String s) => s.isEmpty ? s : s[0].toUpperCase() + s.substring(1);
 
 /// Time in a TTS-friendly form: "9 30 AM", "10 AM".
 String _spokenTime(DateTime t) {
@@ -76,88 +78,69 @@ String composeBriefing(BriefingData d) {
   final now = d.now;
   final out = <String>[];
 
-  // 1. Greeting
+  // Greeting
   final part = now.hour < 12 ? 'morning' : (now.hour < 18 ? 'afternoon' : 'evening');
   final name = d.userName.trim();
-  final greet = name.isEmpty ? 'Good $part.' : 'Good $part, $name.';
-  out.add(d.afterAlarm ? 'Alarm off. Nice work. $greet' : greet);
+  final greet = name.isEmpty ? 'Good $part!' : 'Good $part, $name!';
+  out.add(d.afterAlarm ? '$greet Alarm off, now up and at it.' : greet);
 
-  // 2. Date
+  // Date
   out.add("It's ${DateFormat('EEEE, MMMM d', 'en_US').format(now)}.");
 
-  // 3. Weather
+  // Weather
   final w = d.weather;
   if (w != null) {
     final place = d.cityLabel.split(',').first.trim();
-    final lead = place.isEmpty ? "It's" : "In $place it's";
-    out.add('$lead ${_degrees(w.now)} and ${w.description}, '
-        'with a high of ${_num(w.max)} and a low of ${_num(w.min)}.');
+    out.add("It's ${_degrees(w.now)} and ${w.description}"
+        '${place.isEmpty ? '' : ' in $place'}, '
+        'high of ${_num(w.max)}, low of ${_num(w.min)}.');
     final rain = w.rainChance;
     if (rain != null && rain >= 50) {
-      out.add("There's a $rain percent chance of rain, so take an umbrella.");
+      out.add('$rain percent chance of rain. Take an umbrella and go anyway.');
     } else if (w.max.round() <= 5) {
-      out.add('Dress warmly.');
+      out.add('Dress warmly, no excuses.');
     } else if (w.max.round() >= 30) {
-      out.add('It will be hot, drink plenty of water.');
+      out.add('It will be hot. Drink plenty of water.');
     }
   }
 
-  // 4. Calendar
+  // Calendar
   final ev = d.events;
   if (ev != null) {
     if (ev.isEmpty) {
-      out.add('Your calendar is clear today.');
+      out.add('Nothing on the calendar. That means no excuses.');
     } else {
-      out.add(ev.length == 1 ? 'You have 1 event today.' : 'You have ${ev.length} events today.');
-      final shown = ev.take(4).toList();
+      out.add('${_cap(_word(ev.length))} ${ev.length == 1 ? 'thing' : 'things'} on the schedule.');
+      final shown = ev.take(8).toList();
       var timed = 0;
       for (var i = 0; i < shown.length; i++) {
         final e = shown[i];
-        final last = i == shown.length - 1;
         var s = e.allDay
             ? 'All day: ${e.title}'
             : '${timed++ == 0 ? 'First, ' : 'Then '}${e.title} at ${_spokenTime(e.start)}';
-        if (last && ev.length > shown.length) {
-          s += ', and ${ev.length - shown.length} more later';
+        if (i == shown.length - 1 && ev.length > shown.length) {
+          s += ', and ${ev.length - shown.length} more after that';
         }
         out.add('$s.');
       }
     }
   }
 
-  // 5. Habits
+  // Habits and streak
   final rem = d.remainingHabits;
   if (rem.isNotEmpty) {
-    out.add('You have ${rem.length} ${rem.length == 1 ? 'habit' : 'habits'} left: '
-        '${_joinList(rem.map(_lowerFirst).toList())}.');
+    final list = _joinList(rem.map(_lowerFirst).toList());
+    final tail = d.streak > 0
+        ? " Get them done and that's day ${d.streak + 1} of your streak."
+        : ' Finish all of them today and the streak starts now.';
+    out.add('${_cap(_word(rem.length))} ${rem.length == 1 ? 'habit' : 'habits'} left: $list.$tail');
   } else if (d.totalHabits > 0) {
-    out.add('All your habits are done.');
+    out.add(d.todayPerfect && d.streak > 1
+        ? "All habits done. That's ${_article(d.streak)} ${d.streak} day streak. Outstanding."
+        : 'All habits done. Outstanding.');
   }
 
-  // 6. Streak
-  if (rem.isEmpty && d.todayPerfect) {
-    out.add(d.streak > 1 ? 'That makes a ${d.streak} day streak.' : 'That starts your streak.');
-  } else if (rem.isNotEmpty) {
-    out.add(d.streak > 0
-        ? 'Finish them to make it day ${d.streak + 1} of your streak.'
-        : 'Finish them all to start a streak.');
-  }
-
-  // 7. Next alarm
-  final na = d.nextAlarm;
-  if (na != null) {
-    final today = DateTime(now.year, now.month, now.day);
-    final days = DateTime(na.year, na.month, na.day).difference(today).inDays;
-    if (days == 1) {
-      out.add('Your next alarm is tomorrow at ${_spokenTime(na)}.');
-    } else if (days > 1) {
-      out.add('Your next alarm is ${DateFormat('EEEE', 'en_US').format(na)} at ${_spokenTime(na)}.');
-    }
-  }
-
-  // 8. Closer
   out.add(_closers[_dayOfYear(now) % _closers.length]);
-
   return out.join(' ').replaceAll(RegExp(r'\s+'), ' ').trim();
 }
 
@@ -196,11 +179,6 @@ class BriefingService {
       debugPrint('BriefingService.gather: $e');
     }
 
-    DateTime? next;
-    for (final a in app.alarms.where((a) => a.enabled)) {
-      final t = a.nextOccurrence(now);
-      if (next == null || t.isBefore(next)) next = t;
-    }
     final habits = app.enabledHabits;
     return BriefingData(
       now: now,
@@ -213,7 +191,6 @@ class BriefingService {
       totalHabits: habits.length,
       streak: app.streak,
       todayPerfect: app.isPerfectDay(DateTime(now.year, now.month, now.day)),
-      nextAlarm: next,
       afterAlarm: afterAlarm,
     );
   }
@@ -237,4 +214,14 @@ class BriefingService {
         .today(st.cityLat!, st.cityLon!)
         .then<void>((_) {}, onError: (Object _) {}));
   }
+}
+
+/// "an 8 day streak", "an 11 day streak", "a 7 day streak".
+String _article(int n) {
+  final lead = n.toString();
+  final an = lead.startsWith('8') ||
+      n == 11 ||
+      n == 18 ||
+      (lead.startsWith('11') || lead.startsWith('18')) && lead.length % 3 == 2;
+  return an ? 'an' : 'a';
 }

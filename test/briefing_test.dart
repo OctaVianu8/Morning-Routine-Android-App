@@ -26,7 +26,6 @@ BriefingData _full({bool afterAlarm = false}) => BriefingData(
       remainingHabits: ['Drink a glass of water', 'Make the bed', 'Go outside for 5 minutes'],
       totalHabits: 4,
       streak: 7,
-      nextAlarm: DateTime(2026, 11, 18, 7),
       afterAlarm: afterAlarm,
     );
 
@@ -41,25 +40,34 @@ void main() {
   test('full briefing', () {
     final t = composeBriefing(_full());
     _clean(t);
-    expect(t, startsWith('Good morning, Octavian.'));
+    expect(t, startsWith('Good morning, Octavian!'));
     expect(t, contains("It's Tuesday, November 17."));
-    expect(t, contains("In Bucharest it's 4 degrees and overcast, with a high of 9 and a low of 2."));
-    expect(t, contains("There's a 70 percent chance of rain, so take an umbrella."));
-    expect(t, contains('You have 6 events today.'));
+    expect(t, contains("It's 4 degrees and overcast in Bucharest, high of 9, low of 2."));
+    expect(t, contains('70 percent chance of rain. Take an umbrella and go anyway.'));
+    expect(t, contains('Six things on the schedule.'));
     expect(t, contains('All day: Holiday.'));
     expect(t.indexOf('First, Algorithms lecture at 10 AM.'),
         lessThan(t.indexOf('Then Team meeting at 2 30 PM.')));
-    expect(t, contains('and 2 more later.'));
-    expect(t, isNot(contains('Dinner')));
-    expect(t, contains('You have 3 habits left: drink a glass of water, make the bed and go outside for 5 minutes.'));
-    expect(t, contains('Finish them to make it day 8 of your streak.'));
-    expect(t, contains('Your next alarm is tomorrow at 7 AM.'));
+    expect(t, contains('Then Call mom at 9 PM.'));
+    expect(t, contains('Three habits left: drink a glass of water, make the bed and go outside for 5 minutes.'));
+    expect(t, contains("Get them done and that's day 8 of your streak."));
+    expect(t, isNot(contains('next alarm')));
     expect(t, isNot(contains('Alarm off')));
+  });
+
+  test('more than eight events', () {
+    final t = composeBriefing(BriefingData(
+      now: DateTime(2026, 11, 17, 7),
+      events: [for (var i = 0; i < 10; i++) _ev('E$i', 8 + i)],
+    ));
+    expect(t, contains('Ten things on the schedule.'));
+    expect(t, contains('Then E7 at 3 PM, and 2 more after that.'));
+    expect(t, isNot(contains('E8')));
   });
 
   test('after alarm prefix', () {
     expect(composeBriefing(_full(afterAlarm: true)),
-        startsWith('Alarm off. Nice work. Good morning, Octavian.'));
+        startsWith('Good morning, Octavian! Alarm off, now up and at it.'));
   });
 
   test('no weather, no calendar, no name', () {
@@ -69,11 +77,11 @@ void main() {
       totalHabits: 1,
     ));
     _clean(t);
-    expect(t, startsWith('Good afternoon.'));
+    expect(t, startsWith('Good afternoon!'));
     expect(t, isNot(contains('degrees')));
     expect(t, isNot(contains('calendar')));
-    expect(t, contains('You have 1 habit left: make the bed.'));
-    expect(t, contains('Finish them all to start a streak.'));
+    expect(t, contains('One habit left: make the bed.'));
+    expect(t, contains('Finish all of them today and the streak starts now.'));
   });
 
   test('calendar clear, advice variants', () {
@@ -81,10 +89,10 @@ void main() {
         BriefingData(now: DateTime(2026, 7, 1, 9), weather: w, events: const []);
     final cold = composeBriefing(d(const WeatherReport(now: -3, min: -6, max: 2, code: 71)));
     expect(cold, contains('minus 3 degrees'));
-    expect(cold, contains('Dress warmly.'));
-    expect(cold, contains('Your calendar is clear today.'));
+    expect(cold, contains('Dress warmly, no excuses.'));
+    expect(cold, contains('Nothing on the calendar. That means no excuses.'));
     final hot = composeBriefing(d(const WeatherReport(now: 25, min: 20, max: 33, code: 0)));
-    expect(hot, contains('It will be hot, drink plenty of water.'));
+    expect(hot, contains('It will be hot. Drink plenty of water.'));
   });
 
   test('all habits done gives streak sentence', () {
@@ -93,12 +101,9 @@ void main() {
       totalHabits: 3,
       streak: 7,
       todayPerfect: true,
-      nextAlarm: DateTime(2026, 11, 20, 6, 45),
     ));
     _clean(t);
-    expect(t, contains('All your habits are done.'));
-    expect(t, contains('That makes a 7 day streak.'));
-    expect(t, contains('Your next alarm is Friday at 6 45 AM.'));
+    expect(t, contains("All habits done. That's a 7 day streak. Outstanding."));
   });
 
   group('WeatherReport.parse', () {
